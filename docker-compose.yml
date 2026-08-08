@@ -1,12 +1,35 @@
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: amr_db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=amr_user
+      - POSTGRES_PASSWORD=super_secret_password
+      - POSTGRES_DB=amr_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U amr_user -d amr_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   api:
     build: ./backend
     container_name: amr_api
     ports:
       - "8002:8000"
     volumes:
-      - ./backend:/app          # hot-reload during development
+      - ./backend:/app
     environment:
-      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+psycopg2://amr_user:super_secret_password@db:5432/amr_db
+    depends_on:
+      db:
+        condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    restart: unless-stopped
+
+volumes:
+  postgres_data:
