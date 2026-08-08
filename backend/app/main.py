@@ -4,6 +4,7 @@ from app.db import create_db_and_tables, get_session
 from app.core.config import settings
 from app.models import Organism, Antibiotic, Patient  # Import so SQLModel sees them
 from app.seed import seed_database
+from app.routers import organisms, antibiotics, patients, cds # <-- added cds
 
 from app.routers import organisms, antibiotics, patients
 
@@ -32,6 +33,7 @@ app = FastAPI(
 app.include_router(organisms.router, prefix="/api/v1")
 app.include_router(antibiotics.router, prefix="/api/v1")
 app.include_router(patients.router, prefix="/api/v1")
+app.include_router(cds.router, prefix="/api/v1")
 
 @app.get("/")
 def root():
