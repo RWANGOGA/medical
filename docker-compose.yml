@@ -1,0 +1,12 @@
+services:
+  api:
+    build: ./backend
+    container_name: amr_api
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./backend:/app          # hot-reload during development
+    environment:
+      - ENVIRONMENT=development
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
