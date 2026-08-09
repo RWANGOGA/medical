@@ -26,6 +26,7 @@ services:
       - ./backend:/app
     environment:
       - DATABASE_URL=postgresql+psycopg2://amr_user:super_secret_password@db:5432/amr_db
+      - GROQ_API_KEY:${GROQ_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy

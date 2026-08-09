@@ -5,8 +5,16 @@ from app.db import create_db_and_tables, get_session
 from app.core.config import settings
 from app.models import Organism, Antibiotic, Patient, TreatmentProtocol
 from app.seed import seed_database
+from app.models import User, AuditLog
+from app.routers import organisms, antibiotics, patients, cds, dashboard, assistant, auth, search
+from app.routers import organisms, antibiotics, patients, cds, dashboard, assistant
 
 from app.routers import organisms, antibiotics, patients, cds, dashboard
+from app.routers import organisms, antibiotics, patients, cds, dashboard, assistant, auth, search, guidelines
+from app.routers import organisms, antibiotics, patients, cds, dashboard, assistant, auth, search, guidelines, lab
+
+# ...
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -37,7 +45,13 @@ app.include_router(organisms.router, prefix="/api/v1")
 app.include_router(antibiotics.router, prefix="/api/v1")
 app.include_router(patients.router, prefix="/api/v1")
 app.include_router(cds.router, prefix="/api/v1")
+app.include_router(assistant.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(search.router, prefix="/api/v1")
+app.include_router(guidelines.router, prefix="/api/v1")
+
+app.include_router(lab.router, prefix="/api/v1")
 
 @app.get("/")
 def root():
