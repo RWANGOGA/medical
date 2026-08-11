@@ -33,6 +33,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://medical-sbit.onrender.com",  # your backend URL
+        "http://localhost:8081",               # local dev web
+        "http://localhost:19006",              # local dev web alt
+        # We'll add your Vercel URL here after we deploy it
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(organisms.router, prefix="/api/v1")
 app.include_router(antibiotics.router, prefix="/api/v1")
