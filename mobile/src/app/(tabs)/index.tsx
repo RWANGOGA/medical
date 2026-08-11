@@ -198,6 +198,19 @@ function DoctorDashboard({ user }: { user: any }) {
             <Ionicons name="chevron-forward" size={20} color={BRANDING.colors.subtext} />
           </TouchableOpacity>
 
+
+
+          <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/chat")}>
+  <View style={[styles.actionIcon, { backgroundColor: BRANDING.colors.primary + "15" }]}>
+    <Ionicons name="chatbubbles" size={24} color={BRANDING.colors.primary} />
+  </View>
+  <View style={styles.actionContent}>
+    <Text style={styles.actionTitle}>Doctor Chat</Text>
+    <Text style={styles.actionSub}>Discuss cases live with colleagues online</Text>
+  </View>
+  <Ionicons name="chevron-forward" size={20} color={BRANDING.colors.subtext} />
+</TouchableOpacity>
+
           {/* Clinical Decision Support */}
           <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/cds")}>
             <View style={[styles.actionIcon, { backgroundColor: BRANDING.colors.watch + "15" }]}>

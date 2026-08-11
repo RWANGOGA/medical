@@ -96,4 +96,15 @@ class LabResult(SQLModel, table=True):
     collection_date: str = ""
     susceptibility: dict = Field(default_factory=dict, sa_column=Column(JSON))
     entered_by: str = ""
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())    
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())  
+
+class ChatMessage(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    sender_id: int
+    sender_name: str
+    sender_role: str = "doctor"
+    sender_hospital: str = ""
+    message: str
+    reply_to_id: Optional[int] = Field(default=None, foreign_key="chatmessage.id")
+    audio_data: Optional[str] = None  # base64 encoded audio
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

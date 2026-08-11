@@ -6,14 +6,7 @@ from app.core.config import settings
 from app.models import Organism, Antibiotic, Patient, TreatmentProtocol
 from app.seed import seed_database
 from app.models import User, AuditLog
-from app.routers import organisms, antibiotics, patients, cds, dashboard, assistant, auth, search
-from app.routers import organisms, antibiotics, patients, cds, dashboard, assistant
-
-from app.routers import organisms, antibiotics, patients, cds, dashboard
-from app.routers import organisms, antibiotics, patients, cds, dashboard, assistant, auth, search, guidelines
-from app.routers import organisms, antibiotics, patients, cds, dashboard, assistant, auth, search, guidelines, lab
-
-# ...
+from app.routers import organisms, antibiotics, patients, cds, dashboard, assistant, auth, search, guidelines, lab, chat, translate
 
 
 @asynccontextmanager
@@ -50,7 +43,8 @@ app.include_router(dashboard.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(search.router, prefix="/api/v1")
 app.include_router(guidelines.router, prefix="/api/v1")
-
+app.include_router(chat.router, prefix="/api/v1")
+app.include_router(translate.router, prefix="/api/v1")
 app.include_router(lab.router, prefix="/api/v1")
 
 @app.get("/")

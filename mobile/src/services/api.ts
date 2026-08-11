@@ -49,7 +49,7 @@ export const api = {
   createPatient: (payload: any) =>
     request<any>("/patients/", { method: "POST", body: JSON.stringify(payload) }),
   
-  // Duplicate check (NEW)
+  // Duplicate check
   checkDuplicate: (payload: any) =>
     request<any>("/patients/check-duplicate", { method: "POST", body: JSON.stringify(payload) }),
 
@@ -89,6 +89,9 @@ export const api = {
   addLabResult: (payload: any) =>
     request<any>("/lab/results", { method: "POST", body: JSON.stringify(payload) }),
 
+  // Chat
+  getChatMessages: () => request<any[]>("/chat/messages"),
+
   // Guideline AI expansion
   expandGuideline: (payload: {
     id: string;
@@ -102,4 +105,7 @@ export const api = {
   // Fast AI antibiotic summary
   summarizeAntibiotic: (id: string) =>
     request<any>("/antibiotics/summarize", { method: "POST", body: JSON.stringify({ id }) }),
+
+    translate: (payload: { text: string; target_language: string }) =>
+    request<{ translated: string }>("/translate/", { method: "POST", body: JSON.stringify(payload) }),
 };
