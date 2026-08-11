@@ -1,14 +1,29 @@
 from sqlmodel import SQLModel, create_engine, Session
-from app.core.config import settings # We will create this in a second
+from sqlalchemy.pool import QueuePool
+from app.core.config import settings
+import os
 
-# Create the database engine
-engine = create_engine(settings.DATABASE_URL, echo=False)
+# Get database URL from environment
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Dependency to get the database session
+# Configure engine with proper SSL and pooling for Neon
+engine = create_engine(
+    DATABASE_URL,
+    poolclass=QueuePool,
+    pool_size=5,
+    max_overflow=10,
+    pool_timeout=30,
+    pool_recycle=1800,  # Recycle connections every 30 minutes (Neon closes idle connections)
+    pool_pre_ping=True,  # Test connections before using them
+    connect_args={
+        "sslmode": "require",
+        "connect_timeout": 10,
+    }
+)
+
+def create_db_and_tables():
+    SQLModel.metadata.create_all(engine)
+
 def get_session():
     with Session(engine) as session:
         yield session
-
-# Function to create all tables
-def create_db_and_tables():
-    SQLModel.metadata.create_all(engine)

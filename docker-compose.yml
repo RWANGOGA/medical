@@ -26,8 +26,7 @@ services:
       - ./backend:/app
     env_file:
       - .env
-    environment:
-      - DATABASE_URL=postgresql+psycopg2://amr_user:super_secret_password@db:5432/amr_db
+  
     depends_on:
       db:
         condition: service_healthy
