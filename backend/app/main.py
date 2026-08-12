@@ -9,7 +9,9 @@ from app.models import User, AuditLog
 from app.routers import organisms, antibiotics, patients, cds, dashboard, assistant, auth, search, guidelines, lab, chat, translate
 from app.routers import organisms, antibiotics, patients, cds, dashboard, assistant, auth, search, guidelines, lab, chat, translate, audit, reports
 from app.services import audit as _audit_trails  # noqa: F401  (registers automatic audit logging)
-
+from fastapi import Request, status
+from fastapi.responses import JSONResponse
+import logging
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -64,3 +66,12 @@ def root():
 @app.get("/api/v1/health")
 def health():
     return {"status": "ok", "database": "healthy"}
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logging.error(f"Unhandled exception: {exc}")
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"message": "An internal server error occurred. Please try again later."},
+    )

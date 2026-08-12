@@ -108,3 +108,5 @@ class ChatMessage(SQLModel, table=True):
     reply_to_id: Optional[int] = Field(default=None, foreign_key="chatmessage.id")
     audio_data: Optional[str] = None  # base64 encoded audio
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    file_data: Optional[str] = None   # base64 PDF
+    file_name: Optional[str] = None

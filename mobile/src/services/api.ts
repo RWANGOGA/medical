@@ -57,12 +57,23 @@ export const api = {
   getCDSRecommendation: (payload: any) =>
     request<any>("/cds/recommend", { method: "POST", body: JSON.stringify(payload) }),
 
-  // Surveillance Dashboard
-  getDashboardTrends: () => request<any[]>("/dashboard/trends"),
-  getDashboardAntibiogram: () => request<any>("/dashboard/antibiogram"),
-  getDashboardAware: () => request<any[]>("/dashboard/aware"),
-  getDashboardAlerts: () => request<string[]>("/dashboard/alerts"),
+    // Surveillance Dashboard (optional hospital filter)
+  getHospitals: () => request<string[]>("/dashboard/hospitals"),
+  getDashboardTrends: (hospital?: string) =>
+    request<any[]>(`/dashboard/trends${hospital ? `?hospital=${encodeURIComponent(hospital)}` : ""}`),
+  getDashboardAntibiogram: (hospital?: string) =>
+    request<any>(`/dashboard/antibiogram${hospital ? `?hospital=${encodeURIComponent(hospital)}` : ""}`),
+  getDashboardAware: (hospital?: string) =>
+    request<any[]>(`/dashboard/aware${hospital ? `?hospital=${encodeURIComponent(hospital)}` : ""}`),
+  getDashboardAlerts: (hospital?: string) =>
+    request<string[]>(`/dashboard/alerts${hospital ? `?hospital=${encodeURIComponent(hospital)}` : ""}`),
 
+  // Feature 4: Audit log
+  getAuditLogs: (limit = 100) => request<any[]>(`/audit/?limit=${limit}`),
+
+  // Feature 5: Report export (public endpoint)
+  reportUrl: (hospital?: string) =>
+    `${BASE_URL}/reports/monthly${hospital ? `?hospital=${encodeURIComponent(hospital)}` : ""}`,
   // AI Assistant
   sendAssistantMessage: (messages: any) =>
     request<{ reply: string }>("/assistant/chat", { method: "POST", body: JSON.stringify({ messages }) }),

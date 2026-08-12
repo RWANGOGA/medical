@@ -1,24 +1,28 @@
 from sqlmodel import SQLModel, create_engine, Session
 from sqlalchemy.pool import QueuePool
 from app.core.config import settings
-import os
 
-# Get database URL from environment
-DATABASE_URL = os.getenv("DATABASE_URL")
+# Get database URL from your settings (.env file)
+db_url = settings.DATABASE_URL
 
-# Configure engine with proper SSL and pooling for Neon
+# Dynamically handle SSL: 
+# Local Docker Postgres doesn't support SSL out-of-the-box, but Neon requires it.
+is_local_docker = "db:" in db_url or "localhost" in db_url or "127.0.0.1" in db_url
+
+connect_args = {"connect_timeout": 10}
+if not is_local_docker:
+    connect_args["sslmode"] = "require"
+
 engine = create_engine(
-    DATABASE_URL,
+    db_url, 
+    echo=True,
+    pool_pre_ping=True,
+    pool_recycle=3800,  # ✅ FIXED: Added missing comma here
     poolclass=QueuePool,
     pool_size=5,
     max_overflow=10,
     pool_timeout=30,
-    pool_recycle=1800,  # Recycle connections every 30 minutes (Neon closes idle connections)
-    pool_pre_ping=True,  # Test connections before using them
-    connect_args={
-        "sslmode": "require",
-        "connect_timeout": 10,
-    }
+    connect_args=connect_args
 )
 
 def create_db_and_tables():

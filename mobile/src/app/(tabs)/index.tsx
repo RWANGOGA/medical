@@ -1,8 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   StyleSheet, Text, View, ScrollView, TouchableOpacity,
-  ActivityIndicator, LayoutAnimation, Platform, UIManager,
+  ActivityIndicator, LayoutAnimation, Platform, UIManager, Linking,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { api } from "../../services/api";
@@ -14,6 +14,8 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+const ALL_HOSPITALS = "All Hospitals";
+
 // ============ TYPES ============
 interface AntibioticSummary {
   overview: string;
@@ -22,17 +24,41 @@ interface AntibioticSummary {
   stewardship_note: string;
 }
 
+// ============ HOSPITAL FILTER (Feature 6) ============
+function HospitalFilter({ value, onChange }: { value: string; onChange: (h: string) => void }) {
+  const { data: hospitals } = useQuery({ queryKey: ["hospitals"], queryFn: api.getHospitals });
+  const options = [ALL_HOSPITALS, ...(hospitals || [])];
+
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.hospitalRow}
+      contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingVertical: 10 }}
+    >
+      {options.map((h) => (
+        <TouchableOpacity
+          key={h}
+          style={[styles.hospitalChip, value === h && styles.hospitalChipActive]}
+          onPress={() => {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            onChange(h);
+          }}
+        >
+          <Text style={[styles.hospitalChipText, value === h && styles.hospitalChipTextActive]}>{h}</Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+}
+
 // ============ EXPANDABLE ANTIBIOTIC CARD ============
 function AntibioticCard({ abx, awareColor }: { abx: any; awareColor: (c: string) => string }) {
   const [expanded, setExpanded] = useState(false);
-  const queryClient = useQueryClient();
+  const queryClient = useQueryClientSafe();
 
-  const mutation = useMutation({
-    mutationFn: () => api.summarizeAntibiotic(abx.id),
-    onSuccess: (data) => queryClient.setQueryData(["abx-summary", abx.id], data),
-  });
-
-  const summary = queryClient.getQueryData<AntibioticSummary>(["abx-summary", abx.id]);
+  const mutation = useQueryMutation(abx.id);
+  const summary = queryClient?.getQueryData<AntibioticSummary>(["abx-summary", abx.id]);
 
   const handleToggle = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -111,14 +137,44 @@ function AntibioticCard({ abx, awareColor }: { abx: any; awareColor: (c: string)
   );
 }
 
-// ============ DOCTOR'S DASHBOARD (shown after login) ============
+// Small helpers so AntibioticCard stays unchanged in behaviour
+import { useQueryClient, useMutation } from "@tanstack/react-query";
+function useQueryClientSafe() {
+  try {
+    return useQueryClient();
+  } catch {
+    return null;
+  }
+}
+function useQueryMutation(abxId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.summarizeAntibiotic(abxId),
+    onSuccess: (data) => queryClient.setQueryData(["abx-summary", abxId], data),
+  });
+}
+
+// ============ DOCTOR'S DASHBOARD ============
 function DoctorDashboard({ user }: { user: any }) {
   const router = useRouter();
-  const { data: patients } = useQuery({ queryKey: ["patients"], queryFn: api.getPatients });
-  const { data: alerts } = useQuery({ queryKey: ["alerts"], queryFn: api.getDashboardAlerts });
+  const [hospital, setHospital] = useState(ALL_HOSPITALS);
+  const activeHospital = hospital === ALL_HOSPITALS ? undefined : hospital;
 
-  const patientCount = patients?.length || 0;
-  const criticalAlerts = alerts?.filter((a: string) => !a.includes("No critical")) || [];
+  const { data: patients } = useQuery({ queryKey: ["patients"], queryFn: api.getPatients });
+  const { data: alerts } = useQuery({
+    queryKey: ["alerts", hospital],
+    queryFn: () => api.getDashboardAlerts(activeHospital),
+  });
+
+  const filteredPatients = (patients || []).filter(
+    (p: any) => !activeHospital || p.hospital === activeHospital
+  );
+  const patientCount = filteredPatients.length;
+  const criticalAlerts = (alerts || []).filter((a: string) => !a.includes("No critical"));
+
+  const downloadReport = () => {
+    Linking.openURL(api.reportUrl(activeHospital));
+  };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 90 }}>
@@ -130,10 +186,15 @@ function DoctorDashboard({ user }: { user: any }) {
         </View>
       </View>
 
+      {/* Feature 6: hospital filter */}
+      <HospitalFilter value={hospital} onChange={setHospital} />
+
       <View style={styles.content}>
         {criticalAlerts.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Critical Alerts ({criticalAlerts.length})</Text>
+            <Text style={styles.sectionTitle}>
+              Critical Alerts ({criticalAlerts.length}){activeHospital ? ` — ${activeHospital}` : ""}
+            </Text>
             {criticalAlerts.map((alert: string, i: number) => (
               <View key={i} style={styles.alertCard}>
                 <View style={styles.alertHeader}>
@@ -162,7 +223,6 @@ function DoctorDashboard({ user }: { user: any }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
 
-          {/* Add New Patient */}
           <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/add-patient")}>
             <View style={[styles.actionIcon, { backgroundColor: BRANDING.colors.access + "15" }]}>
               <Ionicons name="person-add" size={24} color={BRANDING.colors.access} />
@@ -174,7 +234,6 @@ function DoctorDashboard({ user }: { user: any }) {
             <Ionicons name="chevron-forward" size={20} color={BRANDING.colors.subtext} />
           </TouchableOpacity>
 
-          {/* Enter Lab Result */}
           <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/add-lab-result")}>
             <View style={[styles.actionIcon, { backgroundColor: BRANDING.colors.watch + "15" }]}>
               <Ionicons name="flask" size={24} color={BRANDING.colors.watch} />
@@ -186,7 +245,6 @@ function DoctorDashboard({ user }: { user: any }) {
             <Ionicons name="chevron-forward" size={20} color={BRANDING.colors.subtext} />
           </TouchableOpacity>
 
-          {/* Manage Patients */}
           <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/(tabs)/patients")}>
             <View style={[styles.actionIcon, { backgroundColor: BRANDING.colors.primary + "15" }]}>
               <Ionicons name="people" size={24} color={BRANDING.colors.primary} />
@@ -198,20 +256,17 @@ function DoctorDashboard({ user }: { user: any }) {
             <Ionicons name="chevron-forward" size={20} color={BRANDING.colors.subtext} />
           </TouchableOpacity>
 
-
-
           <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/chat")}>
-  <View style={[styles.actionIcon, { backgroundColor: BRANDING.colors.primary + "15" }]}>
-    <Ionicons name="chatbubbles" size={24} color={BRANDING.colors.primary} />
-  </View>
-  <View style={styles.actionContent}>
-    <Text style={styles.actionTitle}>Doctor Chat</Text>
-    <Text style={styles.actionSub}>Discuss cases live with colleagues online</Text>
-  </View>
-  <Ionicons name="chevron-forward" size={20} color={BRANDING.colors.subtext} />
-</TouchableOpacity>
+            <View style={[styles.actionIcon, { backgroundColor: BRANDING.colors.primary + "15" }]}>
+              <Ionicons name="chatbubbles" size={24} color={BRANDING.colors.primary} />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionTitle}>Doctor Chat</Text>
+              <Text style={styles.actionSub}>Discuss cases live with colleagues online</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={BRANDING.colors.subtext} />
+          </TouchableOpacity>
 
-          {/* Clinical Decision Support */}
           <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/cds")}>
             <View style={[styles.actionIcon, { backgroundColor: BRANDING.colors.watch + "15" }]}>
               <Ionicons name="medical" size={24} color={BRANDING.colors.watch} />
@@ -223,7 +278,6 @@ function DoctorDashboard({ user }: { user: any }) {
             <Ionicons name="chevron-forward" size={20} color={BRANDING.colors.subtext} />
           </TouchableOpacity>
 
-          {/* Clinical Guidelines */}
           <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/(tabs)/guidelines")}>
             <View style={[styles.actionIcon, { backgroundColor: BRANDING.colors.reserve + "15" }]}>
               <Ionicons name="book" size={24} color={BRANDING.colors.reserve} />
@@ -234,12 +288,38 @@ function DoctorDashboard({ user }: { user: any }) {
             </View>
             <Ionicons name="chevron-forward" size={20} color={BRANDING.colors.subtext} />
           </TouchableOpacity>
+
+          {/* Feature 4: Activity Log */}
+          <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/audit")}>
+            <View style={[styles.actionIcon, { backgroundColor: BRANDING.colors.watch + "15" }]}>
+              <Ionicons name="list-circle" size={24} color={BRANDING.colors.watch} />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionTitle}>Activity Log</Text>
+              <Text style={styles.actionSub}>Audit trail — who did what, and when</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={BRANDING.colors.subtext} />
+          </TouchableOpacity>
+
+          {/* Feature 5: Report export */}
+          <TouchableOpacity style={styles.actionCard} onPress={downloadReport}>
+            <View style={[styles.actionIcon, { backgroundColor: BRANDING.colors.access + "15" }]}>
+              <Ionicons name="download" size={24} color={BRANDING.colors.access} />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionTitle}>Monthly Stewardship Report</Text>
+              <Text style={styles.actionSub}>
+                Download CSV {activeHospital ? `for ${activeHospital}` : "for all hospitals"}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={BRANDING.colors.subtext} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Patients</Text>
-          {patients && patients.length > 0 ? (
-            patients.slice(0, 3).map((patient: any) => (
+          {filteredPatients.length > 0 ? (
+            filteredPatients.slice(0, 3).map((patient: any) => (
               <TouchableOpacity
                 key={patient.id}
                 style={styles.patientCard}
@@ -250,6 +330,7 @@ function DoctorDashboard({ user }: { user: any }) {
                     <Text style={styles.patientName}>{patient.name}</Text>
                     <Text style={styles.patientMeta}>
                       {patient.age}y · {patient.sex} · {patient.diagnosis || "No diagnosis"}
+                      {patient.hospital ? ` · ${patient.hospital}` : ""}
                     </Text>
                   </View>
                 </View>
@@ -267,11 +348,20 @@ function DoctorDashboard({ user }: { user: any }) {
   );
 }
 
-// ============ PUBLIC HOME (shown before login) ============
+// ============ PUBLIC HOME ============
 function PublicHome() {
   const router = useRouter();
-  const { data: alerts } = useQuery({ queryKey: ["alerts"], queryFn: api.getDashboardAlerts });
-  const { data: aware } = useQuery({ queryKey: ["aware"], queryFn: api.getDashboardAware });
+  const [hospital, setHospital] = useState(ALL_HOSPITALS);
+  const activeHospital = hospital === ALL_HOSPITALS ? undefined : hospital;
+
+  const { data: alerts } = useQuery({
+    queryKey: ["alerts", hospital],
+    queryFn: () => api.getDashboardAlerts(activeHospital),
+  });
+  const { data: aware } = useQuery({
+    queryKey: ["aware", hospital],
+    queryFn: () => api.getDashboardAware(activeHospital),
+  });
   const { data: antibiotics } = useQuery({ queryKey: ["antibiotics"], queryFn: api.getAntibioticsPublic });
 
   const getAwareColor = (cat: string) => {
@@ -300,6 +390,9 @@ function PublicHome() {
         </TouchableOpacity>
       </View>
 
+      {/* Feature 6: hospital filter on public dashboard too */}
+      <HospitalFilter value={hospital} onChange={setHospital} />
+
       <View style={styles.content}>
         {alerts && alerts.length > 0 && alerts[0] !== "No critical resistance alerts at this time." && (
           <View style={styles.alertCard}>
@@ -312,7 +405,9 @@ function PublicHome() {
         )}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>WHO AWaRe category summary</Text>
+          <Text style={styles.sectionTitle}>
+            WHO AWaRe category summary{activeHospital ? ` — ${activeHospital}` : ""}
+          </Text>
           <View style={styles.card}>
             {aware ? (
               <View style={styles.awareRow}>
@@ -357,7 +452,6 @@ function PublicHome() {
 export default function HomeScreen() {
   const { isAuthenticated, user, isLoading } = useAuth();
 
-  // Show a clean loading state while auth is being resolved
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -378,21 +472,9 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BRANDING.colors.background },
 
-  // Loading state
-  loadingContainer: { 
-    flex: 1, 
-    justifyContent: "center", 
-    alignItems: "center", 
-    backgroundColor: BRANDING.colors.background,
-    gap: 12,
-  },
-  loadingText: { 
-    fontSize: 14, 
-    color: BRANDING.colors.subtext,
-    fontWeight: "600",
-  },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: BRANDING.colors.background, gap: 12 },
+  loadingText: { fontSize: 14, color: BRANDING.colors.subtext, fontWeight: "600" },
 
-  // Headers
   dashboardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: BRANDING.colors.primary, padding: 20, paddingTop: 60, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   welcomeText: { color: "rgba(255,255,255,0.8)", fontSize: 12, fontWeight: "600", letterSpacing: 0.5 },
   doctorName: { color: "#fff", fontSize: 24, fontWeight: "800", marginTop: 4 },
@@ -405,20 +487,24 @@ const styles = StyleSheet.create({
   searchBar: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
   searchText: { fontSize: 14, color: "#5C7285" },
 
-  // Content
+  // Hospital filter chips (Feature 6)
+  hospitalRow: { maxHeight: 46, borderBottomWidth: 1, borderBottomColor: BRANDING.colors.border, flexGrow: 0 },
+  hospitalChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: BRANDING.colors.surface, borderWidth: 1, borderColor: BRANDING.colors.border },
+  hospitalChipActive: { backgroundColor: BRANDING.colors.primary, borderColor: BRANDING.colors.primary },
+  hospitalChipText: { fontSize: 12, color: BRANDING.colors.text },
+  hospitalChipTextActive: { color: "#fff", fontWeight: "700" },
+
   content: { padding: 16 },
   section: { marginBottom: 20 },
   sectionTitle: { fontSize: 11, fontWeight: "700", color: BRANDING.colors.subtext, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4, marginTop: 10 },
   sectionHint: { fontSize: 12, color: BRANDING.colors.subtext, marginBottom: 12, fontStyle: "italic" },
   card: { backgroundColor: BRANDING.colors.surface, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: BRANDING.colors.border },
 
-  // Alerts
   alertCard: { backgroundColor: "#FFF5F5", padding: 14, borderRadius: 12, marginBottom: 10, borderLeftWidth: 3, borderLeftColor: BRANDING.colors.reserve },
   alertHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
   alertTitle: { fontSize: 13, fontWeight: "700", color: BRANDING.colors.reserve },
   alertText: { fontSize: 12, color: BRANDING.colors.text, lineHeight: 17 },
 
-  // Stats & Actions
   statsRow: { flexDirection: "row", gap: 12, marginBottom: 20 },
   statCard: { flex: 1, backgroundColor: BRANDING.colors.surface, padding: 16, borderRadius: 12, alignItems: "center", borderWidth: 1, borderColor: BRANDING.colors.border },
   statValue: { fontSize: 20, fontWeight: "800", color: BRANDING.colors.text, marginTop: 8 },
@@ -429,7 +515,6 @@ const styles = StyleSheet.create({
   actionTitle: { fontSize: 15, fontWeight: "700", color: BRANDING.colors.text },
   actionSub: { fontSize: 12, color: BRANDING.colors.subtext, marginTop: 2 },
 
-  // Patient cards
   patientCard: { backgroundColor: BRANDING.colors.surface, padding: 14, borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: BRANDING.colors.border },
   patientHeader: { flexDirection: "row", alignItems: "center" },
   patientName: { fontSize: 15, fontWeight: "700", color: BRANDING.colors.text },
@@ -437,13 +522,11 @@ const styles = StyleSheet.create({
   cultureText: { fontSize: 11, color: BRANDING.colors.subtext, marginTop: 8, fontStyle: "italic" },
   emptyText: { fontSize: 13, color: BRANDING.colors.subtext, textAlign: "center", marginTop: 20 },
 
-  // AWaRe
   awareRow: { flexDirection: "row", justifyContent: "space-around" },
   awareItem: { alignItems: "center" },
   awareCount: { fontSize: 28, fontWeight: "800" },
   awareLabel: { fontSize: 11, color: BRANDING.colors.subtext, marginTop: 4 },
 
-  // Antibiotic expandable cards
   abxCard: { backgroundColor: BRANDING.colors.surface, borderRadius: 12, borderWidth: 1, borderColor: BRANDING.colors.border, marginBottom: 10, overflow: "hidden" },
   abxHeader: { flexDirection: "row", alignItems: "center", padding: 14 },
   abxIconContainer: { width: 30, height: 30, borderRadius: 8, backgroundColor: BRANDING.colors.primary + "15", justifyContent: "center", alignItems: "center", marginRight: 10 },
@@ -465,7 +548,6 @@ const styles = StyleSheet.create({
   stewardshipBox: { flexDirection: "row", backgroundColor: BRANDING.colors.access + "12", borderRadius: 8, padding: 10, marginTop: 12, gap: 8 },
   stewardshipText: { fontSize: 12, color: BRANDING.colors.text, lineHeight: 17, flex: 1 },
 
-  // Login card
   loginCard: { flexDirection: "row", alignItems: "center", backgroundColor: BRANDING.colors.surface, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: BRANDING.colors.border },
   loginTitle: { fontSize: 15, fontWeight: "700", color: BRANDING.colors.text },
   loginSub: { fontSize: 12, color: BRANDING.colors.subtext, marginTop: 2 },
