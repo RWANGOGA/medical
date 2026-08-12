@@ -178,3 +178,31 @@ def get_mechanisms():
         "porin": {"name": "Porin Mutation / Loss", "molecular": "Loss or downregulation of outer-membrane porin channels reduces antibiotic entry into the periplasmic space.", "significance": "Often combines with beta-lactamase production to produce high-level carbapenem resistance.", "affected": ["Carbapenems", "Cephalosporins"], "stillEffective": ["Agents not dependent on porin entry; guided by full susceptibility panel"], "detection": "Inferred from resistance phenotype plus molecular beta-lactamase testing.", "alternatives": "Combination therapy; specialist input required."},
         "biofilm": {"name": "Biofilm Formation", "molecular": "Bacterial communities encased in a self-produced extracellular matrix, reducing antibiotic penetration and immune clearance.", "significance": "Major driver of device-associated and chronic wound infection relapse.", "affected": ["Most classes at standard concentration"], "stillEffective": ["High-dose regimens; rifampin-based combinations for device infection"], "detection": "Clinical suspicion with prosthetic material; specialized biofilm assays in research labs.", "alternatives": "Source control (device removal) is often essential alongside antibiotics."},
     }
+
+
+@router.get("/antibiogram-stats")
+def get_antibiogram_stats(hospital: Optional[str] = Query(None), session: Session = Depends(get_session)):
+    """Detailed antibiogram: S/I/R counts, isolate numbers and %S per cell."""
+    organisms_list = ["E. coli", "K. pneumoniae", "S. aureus", "P. aeruginosa"]
+    drugs_list = ["Ampicillin", "Ceftriaxone", "Pip-Tazo", "Meropenem", "Vancomycin"]
+    org_name_map = {"ecoli": "E. coli", "kpneumo": "K. pneumoniae", "saureus": "S. aureus", "pseudo": "P. aeruginosa"}
+
+    lab_results = session.exec(select(LabResult)).all()
+    if hospital:
+        lab_results = [l for l in lab_results if l.hospital == hospital]
+
+    cells = {org: {drug: {"s": 0, "i": 0, "r": 0, "n": 0, "pct_s": 0.0} for drug in drugs_list} for org in organisms_list}
+    for lr in lab_results:
+        org = org_name_map.get(lr.organism_id)
+        if not org:
+            continue
+        for drug, val in (lr.susceptibility or {}).items():
+            if drug in cells[org] and val in ("S", "I", "R"):
+                c = cells[org][drug]
+                c[val.lower()] += 1
+                c["n"] += 1
+    for org in organisms_list:
+        for drug in drugs_list:
+            c = cells[org][drug]
+            c["pct_s"] = round(100 * c["s"] / c["n"]) if c["n"] else 0.0
+    return {"organisms": organisms_list, "drugs": drugs_list, "cells": cells}    

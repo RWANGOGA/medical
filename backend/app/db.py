@@ -9,7 +9,7 @@ db_url = settings.DATABASE_URL
 # Local Docker Postgres doesn't support SSL out-of-the-box, but Neon requires it.
 is_local_docker = "db:" in db_url or "localhost" in db_url or "127.0.0.1" in db_url
 
-connect_args = {"connect_timeout": 10}
+connect_args = {"connect_timeout": 60}
 if not is_local_docker:
     connect_args["sslmode"] = "require"
 

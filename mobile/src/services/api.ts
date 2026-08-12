@@ -119,4 +119,8 @@ export const api = {
 
     translate: (payload: { text: string; target_language: string }) =>
     request<{ translated: string }>("/translate/", { method: "POST", body: JSON.stringify(payload) }),
+
+
+  getAntibiogramStats: (hospital?: string) =>
+  request<any>(`/dashboard/antibiogram-stats${hospital ? `?hospital=${encodeURIComponent(hospital)}` : ""}`),  
 };
