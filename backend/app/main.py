@@ -7,6 +7,8 @@ from app.models import Organism, Antibiotic, Patient, TreatmentProtocol
 from app.seed import seed_database
 from app.models import User, AuditLog
 from app.routers import organisms, antibiotics, patients, cds, dashboard, assistant, auth, search, guidelines, lab, chat, translate
+from app.routers import organisms, antibiotics, patients, cds, dashboard, assistant, auth, search, guidelines, lab, chat, translate, audit, reports
+from app.services import audit as _audit_trails  # noqa: F401  (registers automatic audit logging)
 
 
 @asynccontextmanager
@@ -35,17 +37,11 @@ app.add_middleware(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://medical-sbit.onrender.com",  # your backend URL
-        "http://localhost:8081",               # local dev web
-        "http://localhost:19006",              # local dev web alt
-        # We'll add your Vercel URL here after we deploy it
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 app.include_router(organisms.router, prefix="/api/v1")
 app.include_router(antibiotics.router, prefix="/api/v1")
 app.include_router(patients.router, prefix="/api/v1")
@@ -58,6 +54,8 @@ app.include_router(guidelines.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(translate.router, prefix="/api/v1")
 app.include_router(lab.router, prefix="/api/v1")
+app.include_router(audit.router, prefix="/api/v1")
+app.include_router(reports.router, prefix="/api/v1")
 
 @app.get("/")
 def root():

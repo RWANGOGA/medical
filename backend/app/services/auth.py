@@ -1,5 +1,7 @@
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
@@ -8,8 +10,10 @@ from sqlmodel import Session
 
 from app.db import get_session
 from app.models import User
+from app.services.audit import set_audit_user
 
-SECRET_KEY = "amr-stewardship-secret-key-change-in-production"
+# Read from environment so the real secret never lives in code/GitHub
+SECRET_KEY = os.getenv("JWT_SECRET", "amr-stewardship-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days for demo
 
@@ -56,4 +60,7 @@ def get_current_user(
     user = session.get(User, user_id)
     if user is None:
         raise credentials_exception
+
+    # Let the audit trail know WHO is performing the action
+    set_audit_user(user)
     return user

@@ -10,7 +10,10 @@ import { BRANDING } from "../constants/branding";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 
-const WS_BASE = "ws://localhost:8002/api/v1/chat/ws";
+// Read from environment, fallback to local dev
+const WS_BASE = process.env.EXPO_PUBLIC_WS_URL || "ws://localhost:8002/api/v1/chat/ws";
+
+// ... rest of the file stays the same
 const LANGUAGES = ["English", "Swahili", "Luganda", "French", "Arabic"];
 
 export default function ChatScreen() {
