@@ -2,12 +2,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
   KeyboardAvoidingView, Platform, Alert, ScrollView, Linking,
+  Animated, Modal, Pressable,
 } from "react-native";
-import { Audio } from "expo-av";
+import {
+  useAudioRecorder,
+  RecordingPresets,
+  setAudioModeAsync,
+  requestRecordingPermissionsAsync,
+  createAudioPlayer,
+} from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
+import * as Haptics from "expo-haptics";
+import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { Swipeable } from "react-native-gesture-handler";
 import { api, getStoredToken } from "../services/api";
 import { BRANDING } from "../constants/branding";
 import { useAuth } from "../context/AuthContext";
@@ -16,6 +26,18 @@ const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:8002/api/v
 const WS_BASE = API_BASE.replace("http", "ws") + "/chat/ws";
 const LANGUAGES = ["English", "Swahili", "Luganda", "French", "Arabic"];
 const EMOJIS = ["😀", "😂", "🙏", "", "❤️", "🎉", "", "😢", "", "", "🩺", "💊", "🧪", "✅", "⚠️", "🔥"];
+const QUICK_REACTIONS = ["👍", "✅", "🙏", "❤️", "⚠️", "🔥"];
+
+const CLINICAL = {
+  primary: BRANDING.colors.primary,
+  accent: BRANDING.colors.access,
+  danger: BRANDING.colors.reserve,
+  bg: BRANDING.colors.background,
+  surface: BRANDING.colors.surface,
+  border: BRANDING.colors.border,
+  text: BRANDING.colors.text,
+  subtext: BRANDING.colors.subtext,
+};
 
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -33,11 +55,30 @@ function dayLabel(iso: string) {
 const initials = (name: string) =>
   (name || "?").split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
 
-function Avatar({ name, online, mine }: { name: string; online?: boolean; mine?: boolean }) {
+function previewFor(m: any) {
+  if (!m) return "";
+  if (m.audio_data) return "🎤 Voice message";
+  if (m.file_data) return `📄 ${m.file_name || "document.pdf"}`;
+  return m.message || "";
+}
+
+function groupReactions(reactions: any[] | undefined, myId: any) {
+  if (!reactions || !reactions.length) return [];
+  const map: Record<string, { emoji: string; count: number; mine: boolean; names: string[] }> = {};
+  for (const r of reactions) {
+    if (!map[r.emoji]) map[r.emoji] = { emoji: r.emoji, count: 0, mine: false, names: [] };
+    map[r.emoji].count += 1;
+    map[r.emoji].names.push(r.user_name || "");
+    if (r.user_id === myId) map[r.emoji].mine = true;
+  }
+  return Object.values(map);
+}
+
+function Avatar({ name, online, mine, size = 36 }: { name: string; online?: boolean; mine?: boolean; size?: number }) {
   return (
     <View>
-      <View style={[styles.avatar, mine && styles.avatarMine]}>
-        <Text style={styles.avatarText}>{initials(name)}</Text>
+      <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }, mine && styles.avatarMine]}>
+        <Text style={[styles.avatarText, { fontSize: size * 0.36 }]}>{initials(name)}</Text>
       </View>
       {online && <View style={styles.onlineDot} />}
     </View>
@@ -54,23 +95,32 @@ export default function ChatScreen() {
   const [input, setInput] = useState("");
   const [connected, setConnected] = useState(false);
   const [replyTo, setReplyTo] = useState<any>(null);
-  const [recording, setRecording] = useState<any>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [playingId, setPlayingId] = useState<number | null>(null);
   const [language, setLanguage] = useState("English");
-  const [showLangs, setShowLangs] = useState(true);
   const [translations, setTranslations] = useState<Record<string, string>>({});
   const [showEmoji, setShowEmoji] = useState(false);
   const [lastIncoming, setLastIncoming] = useState<string | null>(null);
 
+  const [contextMenu, setContextMenu] = useState<{ visible: boolean; message: any | null }>({
+    visible: false,
+    message: null,
+  });
+
+  const [highlightId, setHighlightId] = useState<number | null>(null);
+  const highlightTimeout = useRef<any>(null);
+
   const wsRef = useRef<WebSocket | null>(null);
   const listRef = useRef<FlatList>(null);
-  const soundRef = useRef<any>(null);
+  const playerRef = useRef<any>(null);
   const translatingRef = useRef<Set<string>>(new Set());
   const prevOnlineRef = useRef<Record<string, any> | null>(null);
   const joinedOnceRef = useRef(false);
+  const swipeRefs = useRef<Record<string, any>>({});
 
-  // ---------- load history ----------
+  // Initialize Audio Recorder
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+
   useEffect(() => {
     (async () => {
       try {
@@ -80,7 +130,6 @@ export default function ChatScreen() {
     })();
   }, []);
 
-  // ---------- websocket ----------
   useEffect(() => {
     let socket: WebSocket | null = null;
     let cancelled = false;
@@ -128,6 +177,10 @@ export default function ChatScreen() {
           } else if (data.type === "message") {
             setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data]));
             if (data.sender_id !== user?.id) setLastIncoming(data.created_at);
+          } else if (data.type === "delete") {
+            setMessages((prev) => prev.filter((m) => m.id !== data.id));
+          } else if (data.type === "reaction") {
+            setMessages((prev) => prev.map((m) => (m.id === data.id ? { ...m, reactions: data.reactions } : m)));
           }
         } catch {}
       };
@@ -140,7 +193,6 @@ export default function ChatScreen() {
     };
   }, []);
 
-  // ---------- translation ----------
   useEffect(() => {
     if (language === "English") return;
     const missing = messages.filter(
@@ -159,7 +211,6 @@ export default function ChatScreen() {
     });
   }, [messages, language]);
 
-  // ---------- build list with day dividers + system events ----------
   const items = useMemo(() => {
     const all: any[] = [
       ...systemEvents.map((e) => ({ kind: "system", id: e.id, text: e.text, time: e.time })),
@@ -180,10 +231,93 @@ export default function ChatScreen() {
   }, [messages, systemEvents]);
 
   useEffect(() => {
-    if (items.length) listRef.current?.scrollToEnd({ animated: true });
+    if (items.length && !highlightId) listRef.current?.scrollToEnd({ animated: true });
   }, [items]);
 
-  // ---------- actions ----------
+  useEffect(() => {
+    return () => {
+      if (highlightTimeout.current) clearTimeout(highlightTimeout.current);
+      if (playerRef.current) {
+        try {
+          playerRef.current.remove();
+        } catch {}
+      }
+    };
+  }, []);
+
+  const closeSwipeable = (id: number) => {
+    swipeRefs.current[id]?.close?.();
+  };
+
+  const handleReply = (m: any) => {
+    Haptics.selectionAsync().catch(() => {});
+    setReplyTo(m);
+    setContextMenu({ visible: false, message: null });
+    closeSwipeable(m.id);
+  };
+
+  const handleCopy = async (m: any) => {
+    if (m.message) {
+      await Clipboard.setStringAsync(m.message);
+    }
+    setContextMenu({ visible: false, message: null });
+  };
+
+  const handleDelete = (m: any) => {
+    setContextMenu({ visible: false, message: null });
+    Alert.alert("Delete message", "This will delete the message for everyone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: "delete", id: m.id }));
+          }
+          setMessages((prev) => prev.filter((x) => x.id !== m.id));
+        },
+      },
+    ]);
+  };
+
+  const toggleReaction = (m: any, emoji: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    const myId = user?.id;
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== m.id) return msg;
+        const current: any[] = msg.reactions || [];
+        const already = current.some((r) => r.user_id === myId && r.emoji === emoji);
+        const next = already
+          ? current.filter((r) => !(r.user_id === myId && r.emoji === emoji))
+          : [...current.filter((r) => r.user_id !== myId), { emoji, user_id: myId, user_name: user?.full_name || "You" }];
+        return { ...msg, reactions: next };
+      })
+    );
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "reaction", id: m.id, emoji }));
+    }
+    setContextMenu({ visible: false, message: null });
+  };
+
+  const openContextMenu = (m: any) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    setContextMenu({ visible: true, message: m });
+  };
+
+  const scrollToMessage = (id: number) => {
+    const index = items.findIndex((it) => it.kind === "msg" && it.msg.id === id);
+    if (index === -1) return;
+    try {
+      listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.4 });
+    } catch {
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    }
+    setHighlightId(id);
+    if (highlightTimeout.current) clearTimeout(highlightTimeout.current);
+    highlightTimeout.current = setTimeout(() => setHighlightId(null), 1200);
+  };
+
   const send = () => {
     const text = input.trim();
     if ((!text && !replyTo) || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
@@ -195,14 +329,14 @@ export default function ChatScreen() {
 
   const startRecording = async () => {
     try {
-      const permission = await Audio.requestPermissionsAsync();
-      if (!permission.granted) {
+      const status = await requestRecordingPermissionsAsync();
+      if (!status.granted) {
         Alert.alert("Permission Required", "Please allow microphone access to record voice notes.");
         return;
       }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(recording);
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
       setIsRecording(true);
     } catch {
       Alert.alert("Error", "Failed to start recording.");
@@ -210,24 +344,27 @@ export default function ChatScreen() {
   };
 
   const stopRecording = async () => {
-    if (!recording) return;
     try {
       setIsRecording(false);
-      await recording.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-      const uri = recording.getURI();
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
       if (!uri) return;
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const reader = new FileReader();
-      reader.readAsDataURL(blob);
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({ type: "send", message: "", audio: base64, reply_to_id: replyTo?.id || null }));
-        }
-      };
-      setRecording(null);
+
+      await setAudioModeAsync({ allowsRecording: false });
+      
+      // More reliable native file reading
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ 
+          type: "send", 
+          message: "", 
+          audio: base64, 
+          reply_to_id: replyTo?.id || null 
+        }));
+      }
       setReplyTo(null);
     } catch {
       Alert.alert("Error", "Failed to save recording.");
@@ -237,26 +374,38 @@ export default function ChatScreen() {
   const playAudio = async (message: any) => {
     try {
       if (playingId === message.id) {
-        if (soundRef.current) {
-          await soundRef.current.stopAsync();
-          await soundRef.current.unloadAsync();
+        if (playerRef.current) {
+          playerRef.current.pause();
+          playerRef.current.remove();
+          playerRef.current = null;
         }
         setPlayingId(null);
         return;
       }
-      if (soundRef.current) await soundRef.current.unloadAsync();
-      const { sound } = await Audio.Sound.createAsync({ uri: message.audio_data }, { shouldPlay: true });
-      soundRef.current = sound;
+      if (playerRef.current) {
+        playerRef.current.pause();
+        playerRef.current.remove();
+        playerRef.current = null;
+      }
+      
+      const player = createAudioPlayer({ uri: message.audio_data });
+      playerRef.current = player;
       setPlayingId(message.id);
-      sound.setOnPlaybackStatusUpdate((status: any) => {
-        if (status.isLoaded && status.didJustFinish) setPlayingId(null);
+      
+      player.addListener('playbackStatusUpdate', (status: any) => {
+        if (status.didJustFinish) {
+          setPlayingId(null);
+          player.remove();
+          playerRef.current = null;
+        }
       });
+      
+      player.play();
     } catch {
       Alert.alert("Error", "Failed to play audio.");
     }
   };
 
-  // ---------- PDF sharing ----------
   const pickPdf = async () => {
     try {
       const res = await DocumentPicker.getDocumentAsync({ type: "application/pdf", copyToCacheDirectory: true });
@@ -266,22 +415,21 @@ export default function ChatScreen() {
         Alert.alert("File too large", "Please share PDFs under 2 MB.");
         return;
       }
-      const resp = await fetch(asset.uri);
-      const blob = await resp.blob();
-      const reader = new FileReader();
-      reader.readAsDataURL(blob);
-      reader.onloadend = () => {
-        const base64 = (reader.result as string).split(",")[1];
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({
-            type: "send",
-            message: "",
-            file_data: base64,
-            file_name: asset.name || "document.pdf",
-            reply_to_id: replyTo?.id || null,
-          }));
-        }
-      };
+      
+      // Direct base64 string conversion via FileSystem (more stable than FileReader on native)
+      const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: "send",
+          message: "",
+          file_data: base64,
+          file_name: asset.name || "document.pdf",
+          reply_to_id: replyTo?.id || null,
+        }));
+      }
       setReplyTo(null);
     } catch {
       Alert.alert("Error", "Could not attach the PDF.");
@@ -306,7 +454,21 @@ export default function ChatScreen() {
     }
   };
 
-  // ---------- message bubble ----------
+  const renderLeftActions = (
+    _progress: Animated.AnimatedInterpolation<number>,
+    dragX: Animated.AnimatedInterpolation<number>
+  ) => {
+    const opacity = dragX.interpolate({ inputRange: [0, 40, 80], outputRange: [0, 0.5, 1], extrapolate: "clamp" });
+    const scale = dragX.interpolate({ inputRange: [0, 80], outputRange: [0.6, 1], extrapolate: "clamp" });
+    return (
+      <View style={styles.swipeReplyIcon}>
+        <Animated.View style={{ opacity, transform: [{ scale }] }}>
+          <Ionicons name="arrow-undo" size={20} color={CLINICAL.primary} />
+        </Animated.View>
+      </View>
+    );
+  };
+
   const renderMsg = (m: any) => {
     const mine = m.sender_id === user?.id;
     const isAudio = !!m.audio_data;
@@ -315,8 +477,10 @@ export default function ChatScreen() {
     const translated = translations[`${m.id}:${language}`];
     const showTranslated = language !== "English" && !mine && translated;
     const read = mine && lastIncoming && new Date(m.created_at).getTime() <= new Date(lastIncoming).getTime();
+    const isHighlighted = highlightId === m.id;
+    const reactionPills = groupReactions(m.reactions, user?.id);
 
-    return (
+    const bubble = (
       <View style={[styles.msgRow, mine && styles.msgRowMine]}>
         {!mine && <Avatar name={m.sender_name} online={senderOnline} />}
         <View style={[styles.bubbleWrap, mine && styles.bubbleWrapMine]}>
@@ -325,31 +489,50 @@ export default function ChatScreen() {
             <Text style={styles.msgTime}>{fmtTime(m.created_at)}</Text>
           </View>
           <TouchableOpacity
-            style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther]}
-            onLongPress={() => !isAudio && !isFile && setReplyTo(m)}
+            style={[
+              styles.bubble,
+              mine ? styles.bubbleMine : styles.bubbleOther,
+              isHighlighted && styles.bubbleHighlighted,
+            ]}
+            onLongPress={() => openContextMenu(m)}
+            delayLongPress={220}
             activeOpacity={0.85}
           >
             {m.reply_context && (
-              <View style={styles.replyQuote}>
+              <TouchableOpacity
+                style={styles.replyQuote}
+                onPress={() => scrollToMessage(m.reply_context.id)}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.replyQuoteName}>{m.reply_context.sender_name}</Text>
-                <Text style={styles.replyQuoteText} numberOfLines={2}>{m.reply_context.message}</Text>
-              </View>
+                <Text style={styles.replyQuoteText} numberOfLines={2}>
+                  {previewFor(m.reply_context)}
+                </Text>
+              </TouchableOpacity>
             )}
 
             {isFile ? (
               <TouchableOpacity style={styles.fileBubble} onPress={() => openPdf(m)}>
-                <Ionicons name="document-text" size={26} color={mine ? BRANDING.colors.access : BRANDING.colors.primary} />
+                <View style={styles.fileIconWrap}>
+                  <Ionicons name="document-text" size={22} color={CLINICAL.primary} />
+                </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <Text style={styles.fileName} numberOfLines={1}>{m.file_name || "document.pdf"}</Text>
-                  <Text style={styles.fileHint}>PDF · tap to open</Text>
+                  <Text style={styles.fileHint}>PDF document · tap to open</Text>
                 </View>
-                <Ionicons name="download-outline" size={18} color={BRANDING.colors.subtext} />
+                <Ionicons name="download-outline" size={17} color={CLINICAL.subtext} />
               </TouchableOpacity>
             ) : isAudio ? (
               <TouchableOpacity style={styles.audioBubble} onPress={() => playAudio(m)}>
-                <Ionicons name={playingId === m.id ? "pause" : "play"} size={22} color={mine ? BRANDING.colors.access : BRANDING.colors.primary} />
-                <Text style={styles.audioText}>Voice message</Text>
-                <Ionicons name="volume-high-outline" size={16} color={BRANDING.colors.subtext} />
+                <View style={styles.audioPlayWrap}>
+                  <Ionicons name={playingId === m.id ? "pause" : "play"} size={16} color="#fff" />
+                </View>
+                <View style={styles.audioWave}>
+                  {[6, 12, 8, 16, 10, 14, 7].map((h, i) => (
+                    <View key={i} style={[styles.audioBar, { height: h }]} />
+                  ))}
+                </View>
+                <Text style={styles.audioLabel}>Voice note</Text>
               </TouchableOpacity>
             ) : (
               <>
@@ -362,13 +545,42 @@ export default function ChatScreen() {
 
             {mine && (
               <View style={styles.tickRow}>
-                <Ionicons name={read ? "checkmark-done" : "checkmark"} size={13} color={read ? BRANDING.colors.access : BRANDING.colors.subtext} />
+                <Ionicons name={read ? "checkmark-done" : "checkmark"} size={13} color={read ? CLINICAL.accent : CLINICAL.subtext} />
               </View>
             )}
           </TouchableOpacity>
+
+          {reactionPills.length > 0 && (
+            <View style={[styles.reactionRow, mine && styles.reactionRowMine]}>
+              {reactionPills.map((r) => (
+                <TouchableOpacity
+                  key={r.emoji}
+                  style={[styles.reactionPill, r.mine && styles.reactionPillMine]}
+                  onPress={() => toggleReaction(m, r.emoji)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.reactionEmoji}>{r.emoji}</Text>
+                  {r.count > 1 && <Text style={[styles.reactionCount, r.mine && styles.reactionCountMine]}>{r.count}</Text>}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
         {mine && <Avatar name={user?.full_name || "You"} online mine />}
       </View>
+    );
+
+    return (
+      <Swipeable
+        ref={(ref) => { swipeRefs.current[m.id] = ref; }}
+        renderLeftActions={renderLeftActions}
+        leftThreshold={70}
+        friction={2}
+        onSwipeableWillOpen={() => handleReply(m)}
+        overshootLeft={false}
+      >
+        {bubble}
+      </Swipeable>
     );
   };
 
@@ -376,9 +588,9 @@ export default function ChatScreen() {
     if (item.kind === "divider") {
       return (
         <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerLabel}>{item.label}</Text>
-          <View style={styles.dividerLine} />
+          <View style={styles.dividerPill}>
+            <Text style={styles.dividerLabel}>{item.label}</Text>
+          </View>
         </View>
       );
     }
@@ -386,32 +598,59 @@ export default function ChatScreen() {
     return renderMsg(item.msg);
   };
 
+  const menuMsg = contextMenu.message;
+  const menuMine = menuMsg && menuMsg.sender_id === user?.id;
+
+  const onlinePreview = online.slice(0, 3);
+  const onlineOverflow = online.length - onlinePreview.length;
+
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      {/* header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
           <Ionicons name="arrow-back" size={20} color="#fff" />
         </TouchableOpacity>
-        <View style={{ flex: 1, marginLeft: 10 }}>
-          <Text style={styles.title} numberOfLines={1}>Clinical Discussion</Text>
-          <Text style={styles.subtitle}>{connected ? `Connected · ${online.length + 1} online` : "Connecting…"}</Text>
+        <View style={styles.headerTitleWrap}>
+          <View style={styles.headerTitleRow}>
+            <Ionicons name="medkit" size={15} color="rgba(255,255,255,0.85)" style={{ marginRight: 6 }} />
+            <Text style={styles.title} numberOfLines={1}>Clinical Discussion</Text>
+          </View>
+          <View style={styles.statusRow}>
+            <View style={[styles.statusDot, { backgroundColor: connected ? "#4ADE80" : "#FBBF24" }]} />
+            <Text style={styles.subtitle}>{connected ? "Connected" : "Connecting…"}</Text>
+          </View>
         </View>
-        <TouchableOpacity onPress={() => setShowLangs((v) => !v)} style={styles.headerBtn}>
-          <Ionicons name="language" size={20} color="#fff" />
-        </TouchableOpacity>
+        <View style={styles.avatarStack}>
+          {onlinePreview.map((o, i) => (
+            <View key={o.id} style={[styles.stackAvatar, { marginLeft: i === 0 ? 0 : -10, zIndex: 10 - i }]}>
+              <Text style={styles.stackAvatarText}>{initials(o.name)}</Text>
+            </View>
+          ))}
+          {onlineOverflow > 0 && (
+            <View style={[styles.stackAvatar, styles.stackAvatarMore, { marginLeft: -10 }]}>
+              <Text style={styles.stackAvatarText}>+{onlineOverflow}</Text>
+            </View>
+          )}
+        </View>
       </View>
 
-      {/* language translator */}
-      {showLangs && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.langRow} contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingVertical: 10 }}>
+      <View style={styles.langBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.langBarContent}
+        >
           {LANGUAGES.map((lang) => (
-            <TouchableOpacity key={lang} style={[styles.langChip, language === lang && styles.langChipActive]} onPress={() => setLanguage(lang)}>
+            <TouchableOpacity
+              key={lang}
+              style={[styles.langChip, language === lang && styles.langChipActive]}
+              onPress={() => setLanguage(lang)}
+            >
               <Text style={[styles.langChipText, language === lang && styles.langChipTextActive]}>{lang}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
-      )}
+      </View>
 
       <FlatList
         ref={listRef}
@@ -419,10 +658,15 @@ export default function ChatScreen() {
         keyExtractor={(i) => String(i.id)}
         renderItem={renderItem}
         contentContainerStyle={{ padding: 16, paddingBottom: 12 }}
+        onScrollToIndexFailed={(info) => {
+          setTimeout(() => {
+            listRef.current?.scrollToIndex({ index: info.index, animated: true });
+          }, 100);
+        }}
         ListHeaderComponent={
           <View style={styles.intro}>
             <View style={styles.introIcon}>
-              <Ionicons name="chatbubbles" size={26} color={BRANDING.colors.primary} />
+              <Ionicons name="pulse" size={24} color={CLINICAL.primary} />
             </View>
             <Text style={styles.introTitle}>Clinical Discussion</Text>
             <Text style={styles.introDesc}>
@@ -432,27 +676,66 @@ export default function ChatScreen() {
         }
       />
 
+      <Modal visible={contextMenu.visible} transparent animationType="fade" onRequestClose={() => setContextMenu({ visible: false, message: null })}>
+        <Pressable style={styles.menuBackdrop} onPress={() => setContextMenu({ visible: false, message: null })}>
+          <View style={styles.menuSheet}>
+            <View style={styles.menuHandle} />
+
+            <View style={styles.quickReactRow}>
+              {QUICK_REACTIONS.map((e) => (
+                <TouchableOpacity
+                  key={e}
+                  style={styles.quickReactBtn}
+                  onPress={() => menuMsg && toggleReaction(menuMsg, e)}
+                >
+                  <Text style={styles.quickReactEmoji}>{e}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => menuMsg && handleReply(menuMsg)}>
+              <Ionicons name="arrow-undo-outline" size={20} color={CLINICAL.text} />
+              <Text style={styles.menuItemText}>Reply</Text>
+            </TouchableOpacity>
+            {menuMsg && menuMsg.message ? (
+              <TouchableOpacity style={styles.menuItem} onPress={() => handleCopy(menuMsg)}>
+                <Ionicons name="copy-outline" size={20} color={CLINICAL.text} />
+                <Text style={styles.menuItemText}>Copy</Text>
+              </TouchableOpacity>
+            ) : null}
+            {menuMine ? (
+              <TouchableOpacity style={styles.menuItem} onPress={() => menuMsg && handleDelete(menuMsg)}>
+                <Ionicons name="trash-outline" size={20} color={CLINICAL.danger} />
+                <Text style={[styles.menuItemText, { color: CLINICAL.danger }]}>Delete</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </Pressable>
+      </Modal>
+
       <View style={styles.composer}>
         {replyTo && (
           <View style={styles.replyPreview}>
             <View style={styles.replyPreviewContent}>
               <Text style={styles.replyPreviewName}>Replying to {replyTo.sender_name}</Text>
-              <Text style={styles.replyPreviewText} numberOfLines={1}>{replyTo.message}</Text>
+              <Text style={styles.replyPreviewText} numberOfLines={1}>{previewFor(replyTo)}</Text>
             </View>
-            <TouchableOpacity onPress={() => setReplyTo(null)}>
-              <Ionicons name="close" size={20} color={BRANDING.colors.subtext} />
+            <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.replyCloseBtn}>
+              <Ionicons name="close" size={18} color={CLINICAL.subtext} />
             </TouchableOpacity>
           </View>
         )}
 
-        <TextInput
-          style={styles.input}
-          value={input}
-          onChangeText={setInput}
-          placeholder="Write to Clinical Discussion…"
-          placeholderTextColor={BRANDING.colors.subtext}
-          multiline
-        />
+        <View style={styles.inputRow}>
+          <TextInput
+            style={styles.input}
+            value={input}
+            onChangeText={setInput}
+            placeholder="Write to Clinical Discussion…"
+            placeholderTextColor={CLINICAL.subtext}
+            multiline
+          />
+        </View>
 
         {showEmoji && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.emojiRow}>
@@ -466,16 +749,16 @@ export default function ChatScreen() {
 
         <View style={styles.toolbar}>
           <TouchableOpacity style={styles.toolBtn} onPress={() => setShowEmoji((v) => !v)}>
-            <Ionicons name="happy-outline" size={18} color={BRANDING.colors.subtext} />
+            <Ionicons name="happy-outline" size={18} color={CLINICAL.subtext} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.toolBtn} onPress={pickPdf}>
-            <Ionicons name="document-attach-outline" size={18} color={BRANDING.colors.subtext} />
+            <Ionicons name="document-attach-outline" size={18} color={CLINICAL.subtext} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.toolBtn, isRecording && styles.toolBtnRec]} onPress={isRecording ? stopRecording : startRecording}>
-            <Ionicons name={isRecording ? "stop" : "mic"} size={18} color={isRecording ? "#fff" : BRANDING.colors.subtext} />
+            <Ionicons name={isRecording ? "stop" : "mic"} size={18} color={isRecording ? "#fff" : CLINICAL.subtext} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]} onPress={send}>
-            <Ionicons name="send" size={17} color="#fff" />
+            <Ionicons name="send" size={16} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
@@ -484,74 +767,173 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BRANDING.colors.background },
+  container: { flex: 1, backgroundColor: CLINICAL.bg },
 
-  header: { flexDirection: "row", alignItems: "center", backgroundColor: BRANDING.colors.primary, paddingHorizontal: 12, paddingTop: 56, paddingBottom: 12, borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  // ---- header ----
+  header: {
+    flexDirection: "row", alignItems: "center", backgroundColor: CLINICAL.primary,
+    paddingHorizontal: 12, paddingTop: 54, paddingBottom: 14,
+    borderBottomLeftRadius: 18, borderBottomRightRadius: 18,
+    boxShadow: '0 3px 8px rgba(0, 0, 0, 0.12)',
+    elevation: 4,
+  },
   headerBtn: { padding: 6 },
-  title: { color: "#fff", fontSize: 17, fontWeight: "800" },
-  subtitle: { color: "rgba(255,255,255,0.8)", fontSize: 11, marginTop: 2 },
+  headerTitleWrap: { flex: 1, marginLeft: 8 },
+  headerTitleRow: { flexDirection: "row", alignItems: "center" },
+  title: { color: "#fff", fontSize: 16.5, fontWeight: "700", letterSpacing: 0.2 },
+  statusRow: { flexDirection: "row", alignItems: "center", marginTop: 3 },
+  statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 5 },
+  subtitle: { color: "rgba(255,255,255,0.82)", fontSize: 11.5, fontWeight: "500" },
 
-  langRow: { maxHeight: 46, borderBottomWidth: 1, borderBottomColor: BRANDING.colors.border, flexGrow: 0 },
-  langChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: BRANDING.colors.surface, borderWidth: 1, borderColor: BRANDING.colors.border },
-  langChipActive: { backgroundColor: BRANDING.colors.primary, borderColor: BRANDING.colors.primary },
-  langChipText: { fontSize: 12, color: BRANDING.colors.text },
+  avatarStack: { flexDirection: "row", alignItems: "center", paddingRight: 4 },
+  stackAvatar: {
+    width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.22)",
+    justifyContent: "center", alignItems: "center", borderWidth: 1.5, borderColor: CLINICAL.primary,
+  },
+  stackAvatarMore: { backgroundColor: "rgba(0,0,0,0.25)" },
+  stackAvatarText: { color: "#fff", fontSize: 10, fontWeight: "700" },
+
+  // ---- language bar ----
+  langBar: {
+    backgroundColor: CLINICAL.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: CLINICAL.border,
+    boxShadow: '0 2px 3px rgba(0, 0, 0, 0.04)',
+    elevation: 2,
+    zIndex: 5,
+  },
+  langBarContent: { paddingHorizontal: 14, paddingVertical: 10, alignItems: "center", gap: 8 },
+  langChip: {
+    paddingHorizontal: 13, paddingVertical: 7, borderRadius: 18,
+    backgroundColor: CLINICAL.bg, borderWidth: 1, borderColor: CLINICAL.border,
+  },
+  langChipActive: { backgroundColor: CLINICAL.primary, borderColor: CLINICAL.primary },
+  langChipText: { fontSize: 12.5, color: CLINICAL.text, fontWeight: "500" },
   langChipTextActive: { color: "#fff", fontWeight: "700" },
 
-  intro: { alignItems: "center", paddingVertical: 20, paddingHorizontal: 20 },
-  introIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: BRANDING.colors.primary + "15", justifyContent: "center", alignItems: "center", marginBottom: 12 },
-  introTitle: { fontSize: 20, fontWeight: "800", color: BRANDING.colors.text },
-  introDesc: { fontSize: 13, color: BRANDING.colors.subtext, textAlign: "center", marginTop: 8, lineHeight: 19 },
+  // ---- empty state ----
+  intro: { alignItems: "center", paddingVertical: 22, paddingHorizontal: 20 },
+  introIcon: {
+    width: 52, height: 52, borderRadius: 26, backgroundColor: CLINICAL.primary + "12",
+    justifyContent: "center", alignItems: "center", marginBottom: 12,
+    borderWidth: 1, borderColor: CLINICAL.primary + "22",
+  },
+  introTitle: { fontSize: 18, fontWeight: "800", color: CLINICAL.text },
+  introDesc: { fontSize: 12.5, color: CLINICAL.subtext, textAlign: "center", marginTop: 6, lineHeight: 18, maxWidth: 280 },
 
-  dividerRow: { flexDirection: "row", alignItems: "center", marginVertical: 14 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: BRANDING.colors.border },
-  dividerLabel: { fontSize: 12, fontWeight: "700", color: BRANDING.colors.text, marginHorizontal: 10 },
-  systemText: { textAlign: "center", fontSize: 12, color: BRANDING.colors.subtext, marginVertical: 6 },
+  // ---- day dividers ----
+  dividerRow: { alignItems: "center", marginVertical: 16 },
+  dividerPill: {
+    backgroundColor: CLINICAL.surface, borderWidth: 1, borderColor: CLINICAL.border,
+    paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12,
+  },
+  dividerLabel: { fontSize: 11.5, fontWeight: "700", color: CLINICAL.subtext },
+  systemText: { textAlign: "center", fontSize: 11.5, color: CLINICAL.subtext, marginVertical: 8, fontStyle: "italic" },
 
-  msgRow: { flexDirection: "row", marginBottom: 14, alignItems: "flex-start" },
+  // ---- message rows ----
+  msgRow: { flexDirection: "row", marginBottom: 16, alignItems: "flex-start" },
   msgRowMine: { justifyContent: "flex-end" },
-  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: BRANDING.colors.primary, justifyContent: "center", alignItems: "center" },
-  avatarMine: { backgroundColor: BRANDING.colors.access },
-  avatarText: { color: "#fff", fontWeight: "800", fontSize: 13 },
-  onlineDot: { position: "absolute", right: -1, bottom: -1, width: 10, height: 10, borderRadius: 5, backgroundColor: BRANDING.colors.access, borderWidth: 2, borderColor: BRANDING.colors.background },
+  avatar: { backgroundColor: CLINICAL.primary, justifyContent: "center", alignItems: "center" },
+  avatarMine: { backgroundColor: CLINICAL.accent },
+  avatarText: { color: "#fff", fontWeight: "800" },
+  onlineDot: { position: "absolute", right: -1, bottom: -1, width: 10, height: 10, borderRadius: 5, backgroundColor: "#4ADE80", borderWidth: 2, borderColor: CLINICAL.bg },
 
-  bubbleWrap: { flex: 1, marginLeft: 10, maxWidth: "80%" },
+  bubbleWrap: { flex: 1, marginLeft: 10, maxWidth: "82%" },
   bubbleWrapMine: { marginLeft: 0, marginRight: 10, alignItems: "flex-end" },
   nameRow: { flexDirection: "row", alignItems: "baseline", marginBottom: 4 },
   nameRowMine: { justifyContent: "flex-end" },
-  senderName: { fontSize: 13, fontWeight: "800", color: BRANDING.colors.text },
-  msgTime: { fontSize: 10, color: BRANDING.colors.subtext, marginLeft: 8 },
+  senderName: { fontSize: 12.5, fontWeight: "700", color: CLINICAL.text },
+  msgTime: { fontSize: 10, color: CLINICAL.subtext, marginLeft: 8 },
 
-  bubble: { padding: 12, borderRadius: 12 },
-  bubbleMine: { backgroundColor: "#DCF3DC", borderWidth: 1, borderColor: "#BFE6BF" },
-  bubbleOther: { backgroundColor: BRANDING.colors.surface, borderWidth: 1, borderColor: BRANDING.colors.border },
-  bubbleText: { fontSize: 14, color: BRANDING.colors.text, lineHeight: 20 },
-  bubbleTextMine: { color: BRANDING.colors.text },
-  originalText: { fontSize: 11, color: BRANDING.colors.subtext, marginTop: 4, fontStyle: "italic" },
+  bubble: {
+    padding: 12, borderRadius: 14,
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+    elevation: 1,
+  },
+  bubbleMine: { backgroundColor: CLINICAL.accent + "17", borderWidth: 1, borderColor: CLINICAL.accent + "35" },
+  bubbleOther: { backgroundColor: CLINICAL.surface, borderWidth: 1, borderColor: CLINICAL.border },
+  bubbleHighlighted: { backgroundColor: "#FEF3C7", borderColor: "#F5C451" },
+  bubbleText: { fontSize: 14, color: CLINICAL.text, lineHeight: 20 },
+  bubbleTextMine: { color: CLINICAL.text },
+  originalText: { fontSize: 11, color: CLINICAL.subtext, marginTop: 4, fontStyle: "italic" },
   tickRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 4 },
 
-  replyQuote: { backgroundColor: "rgba(0,0,0,0.05)", padding: 8, borderRadius: 8, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: BRANDING.colors.primary },
-  replyQuoteName: { fontSize: 10, fontWeight: "700", color: BRANDING.colors.primary, marginBottom: 2 },
-  replyQuoteText: { fontSize: 11, color: BRANDING.colors.subtext },
+  replyQuote: {
+    backgroundColor: CLINICAL.primary + "0F", padding: 8, borderRadius: 8, marginBottom: 8,
+    borderLeftWidth: 3, borderLeftColor: CLINICAL.primary,
+  },
+  replyQuoteName: { fontSize: 10, fontWeight: "700", color: CLINICAL.primary, marginBottom: 2 },
+  replyQuoteText: { fontSize: 11, color: CLINICAL.subtext },
 
-  audioBubble: { flexDirection: "row", alignItems: "center", gap: 10 },
-  audioText: { fontSize: 13, color: BRANDING.colors.text, fontStyle: "italic" },
+  audioBubble: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 2 },
+  audioPlayWrap: { width: 30, height: 30, borderRadius: 15, backgroundColor: CLINICAL.primary, justifyContent: "center", alignItems: "center" },
+  audioWave: { flexDirection: "row", alignItems: "center", gap: 3, flex: 1 },
+  audioBar: { width: 3, borderRadius: 2, backgroundColor: CLINICAL.primary + "55" },
+  audioLabel: { fontSize: 11.5, color: CLINICAL.subtext, fontWeight: "500" },
 
   fileBubble: { flexDirection: "row", alignItems: "center" },
-  fileName: { fontSize: 13, fontWeight: "700", color: BRANDING.colors.text },
-  fileHint: { fontSize: 11, color: BRANDING.colors.subtext, marginTop: 2 },
+  fileIconWrap: { width: 38, height: 38, borderRadius: 10, backgroundColor: CLINICAL.primary + "12", justifyContent: "center", alignItems: "center" },
+  fileName: { fontSize: 13, fontWeight: "700", color: CLINICAL.text },
+  fileHint: { fontSize: 11, color: CLINICAL.subtext, marginTop: 2 },
 
-  replyPreview: { flexDirection: "row", alignItems: "center", marginBottom: 8, gap: 12 },
-  replyPreviewContent: { flex: 1, borderLeftWidth: 3, borderLeftColor: BRANDING.colors.primary, paddingLeft: 8 },
-  replyPreviewName: { fontSize: 11, fontWeight: "700", color: BRANDING.colors.primary, marginBottom: 2 },
-  replyPreviewText: { fontSize: 12, color: BRANDING.colors.text },
+  // ---- reaction pills ----
+  reactionRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 5 },
+  reactionRowMine: { justifyContent: "flex-end" },
+  reactionPill: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    backgroundColor: CLINICAL.surface, borderWidth: 1, borderColor: CLINICAL.border,
+    borderRadius: 12, paddingHorizontal: 7, paddingVertical: 3,
+  },
+  reactionPillMine: { backgroundColor: CLINICAL.primary + "14", borderColor: CLINICAL.primary + "45" },
+  reactionEmoji: { fontSize: 12.5 },
+  reactionCount: { fontSize: 11, fontWeight: "700", color: CLINICAL.subtext },
+  reactionCountMine: { color: CLINICAL.primary },
 
-  composer: { borderTopWidth: 1, borderTopColor: BRANDING.colors.border, backgroundColor: BRANDING.colors.surface, padding: 10 },
-  input: { backgroundColor: BRANDING.colors.background, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: BRANDING.colors.text, borderWidth: 1, borderColor: BRANDING.colors.border, maxHeight: 100 },
+  swipeReplyIcon: { width: 56, justifyContent: "center", alignItems: "center" },
+
+  // ---- context menu ----
+  menuBackdrop: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.4)", justifyContent: "flex-end" },
+  menuSheet: { backgroundColor: CLINICAL.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 10, paddingBottom: 26, alignItems: "stretch" },
+  menuHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: CLINICAL.border, alignSelf: "center", marginBottom: 10 },
+  quickReactRow: {
+    flexDirection: "row", justifyContent: "space-around", alignItems: "center",
+    paddingHorizontal: 16, paddingVertical: 10, marginHorizontal: 16, marginBottom: 6,
+    backgroundColor: CLINICAL.bg, borderRadius: 24, borderWidth: 1, borderColor: CLINICAL.border,
+  },
+  quickReactBtn: { padding: 4 },
+  quickReactEmoji: { fontSize: 24 },
+  menuItem: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 22, paddingVertical: 14 },
+  menuItemText: { fontSize: 15, color: CLINICAL.text, fontWeight: "600" },
+
+  // ---- composer ----
+  replyPreview: {
+    flexDirection: "row", alignItems: "center", marginBottom: 8, gap: 10,
+    backgroundColor: CLINICAL.primary + "0A", borderRadius: 10, padding: 8,
+  },
+  replyPreviewContent: { flex: 1, borderLeftWidth: 3, borderLeftColor: CLINICAL.primary, paddingLeft: 8 },
+  replyPreviewName: { fontSize: 11.5, fontWeight: "700", color: CLINICAL.primary, marginBottom: 2 },
+  replyPreviewText: { fontSize: 12.5, color: CLINICAL.text },
+  replyCloseBtn: { padding: 4 },
+
+  composer: {
+    borderTopWidth: 1, borderTopColor: CLINICAL.border, backgroundColor: CLINICAL.surface,
+    padding: 10, paddingBottom: Platform.OS === "ios" ? 10 : 12,
+  },
+  inputRow: { flexDirection: "row", alignItems: "flex-end" },
+  input: {
+    flex: 1, backgroundColor: CLINICAL.bg, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10,
+    fontSize: 14, color: CLINICAL.text, borderWidth: 1, borderColor: CLINICAL.border, maxHeight: 110,
+  },
   emojiRow: { maxHeight: 44, marginTop: 8 },
   emoji: { fontSize: 22, marginHorizontal: 6 },
-  toolbar: { flexDirection: "row", alignItems: "center", marginTop: 8, gap: 6 },
-  toolBtn: { width: 36, height: 36, borderRadius: 8, justifyContent: "center", alignItems: "center", backgroundColor: BRANDING.colors.background, borderWidth: 1, borderColor: BRANDING.colors.border },
-  toolBtnRec: { backgroundColor: BRANDING.colors.reserve, borderColor: BRANDING.colors.reserve },
-  sendBtn: { flex: 1, height: 36, borderRadius: 8, backgroundColor: BRANDING.colors.primary, justifyContent: "center", alignItems: "center" },
-  sendBtnDisabled: { opacity: 0.5 },
+  toolbar: { flexDirection: "row", alignItems: "center", marginTop: 8, gap: 8 },
+  toolBtn: { width: 38, height: 38, borderRadius: 10, justifyContent: "center", alignItems: "center", backgroundColor: CLINICAL.bg, borderWidth: 1, borderColor: CLINICAL.border },
+  toolBtnRec: { backgroundColor: CLINICAL.danger, borderColor: CLINICAL.danger },
+  sendBtn: {
+    flex: 1, height: 38, borderRadius: 10, backgroundColor: CLINICAL.primary,
+    flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6,
+    boxShadow: `0 2px 5px ${CLINICAL.primary}40`,
+    elevation: 2,
+  },
+  sendBtnDisabled: { opacity: 0.45 },
 });
