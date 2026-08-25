@@ -8,8 +8,6 @@ from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/translate", tags=["Translate"])
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-
 SUPPORTED = ["English", "Swahili", "Luganda", "French", "Arabic", "Spanish"]
 
 
@@ -31,9 +29,15 @@ def translate(
     if not text:
         return TranslateResponse(translated="")
 
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        # Never break chat when the AI service is not configured
+        return TranslateResponse(translated=text)
+
     try:
+        client = Groq(api_key=api_key)
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=os.getenv("GROQ_FAST_MODEL", "openai/gpt-oss-20b"),
             messages=[
                 {
                     "role": "system",

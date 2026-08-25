@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../../services/api";
 import { Palette } from "../../constants/branding";
 import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 import { CONTENT_MAX_WIDTH } from "../../components/screen";
 
@@ -76,6 +77,7 @@ function AntibioticCard({ a, styles, colors }: { a: any; styles: any; colors: Pa
 export default function SearchScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { isAuthenticated } = useAuth();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -84,7 +86,11 @@ export default function SearchScreen() {
 
   const { data: organisms } = useQuery({ queryKey: ["organisms"], queryFn: api.getOrganismsPublic });
   const { data: antibiotics } = useQuery({ queryKey: ["antibiotics"], queryFn: api.getAntibioticsPublic });
-  const { data: patients, isError: patientsErr } = useQuery({ queryKey: ["patients"], queryFn: api.getPatients });
+  const { data: patients, isError: patientsErr } = useQuery({
+    queryKey: ["patients"],
+    queryFn: api.getPatients,
+    enabled: isAuthenticated,
+  });
 
   const query = q.trim().toLowerCase();
 

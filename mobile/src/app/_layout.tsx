@@ -5,6 +5,7 @@ import { ActivityIndicator, View, StyleSheet } from "react-native";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { AssistantProvider } from "../context/AssistantContext";
 import { ThemeProvider, useTheme } from "../context/ThemeContext";
+import { ApiError } from "../services/api";
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -43,7 +44,18 @@ function AppContent() {
 }
 
 export default function RootLayout() {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            // Auth failures are handled by the auth flow; retrying just spams 401s
+            retry: (failureCount, error) =>
+              (error as ApiError)?.status !== 401 && failureCount < 2,
+          },
+        },
+      })
+  );
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>

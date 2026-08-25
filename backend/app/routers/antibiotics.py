@@ -68,15 +68,15 @@ def summarize_antibiotic(payload: SummarizeRequest, session: Session = Depends(g
     if not api_key:
         raise HTTPException(status_code=503, detail="AI service not configured")
 
-    # Fast model for quick summaries
-    model = os.getenv("GROQ_FAST_MODEL", "llama-3.1-8b-instant")
+    # Fast model for quick summaries (gpt-oss reasons internally, needs token headroom)
+    model = os.getenv("GROQ_FAST_MODEL", "openai/gpt-oss-20b")
     client = Groq(api_key=api_key)
 
     try:
         completion = client.chat.completions.create(
             model=model,
             temperature=0.2,
-            max_completion_tokens=500,
+            max_completion_tokens=2000,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},

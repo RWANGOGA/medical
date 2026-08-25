@@ -6,10 +6,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../../services/api";
 import { Palette } from "../../constants/branding";
 import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function PatientsScreen() {
   const { colors } = useTheme();
+  const { isAuthenticated } = useAuth();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -17,6 +19,7 @@ export default function PatientsScreen() {
   const { data: patients, isLoading } = useQuery({
     queryKey: ["patients"],
     queryFn: api.getPatients,
+    enabled: isAuthenticated,
   });
 
   if (isLoading) {

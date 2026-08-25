@@ -44,14 +44,14 @@ def chat(payload: ChatRequest):
             reply="The clinical assistant is currently unavailable. Please explore the organism, antibiotic, and resistance reference data across the app, and try again later."
         )
 
-    model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 
     try:
         client = Groq(api_key=api_key)
         completion = client.chat.completions.create(
             model=model,
             temperature=0.4,
-            max_completion_tokens=1024,
+            max_completion_tokens=2048,
             messages=[{"role": "system", "content": SYSTEM_PROMPT}] + [
                 {"role": m.role, "content": m.content} for m in payload.messages
             ],

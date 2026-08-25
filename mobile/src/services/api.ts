@@ -4,6 +4,14 @@ const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:8002/api/v
 
 let authToken: string | null = null;
 
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 export const setAuthToken = async (token: string | null) => {
   authToken = token;
   if (token) {
@@ -35,7 +43,7 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || `API Error: ${response.status}`);
+    throw new ApiError(errorData.detail || `API Error: ${response.status}`, response.status);
   }
   return response.json();
 }
