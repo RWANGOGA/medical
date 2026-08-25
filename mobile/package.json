@@ -1,6 +1,7 @@
 {
   "name": "mobile",
   "main": "expo-router/entry",
+  "entryFiles": ["./src/setup/alert-shim.ts", "expo-router/entry"],
   "version": "1.0.0",
   "dependencies": {
     "@expo/ui": "~57.0.9",

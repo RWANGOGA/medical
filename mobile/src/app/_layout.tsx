@@ -1,4 +1,6 @@
 import { Stack, useRouter, useSegments } from "expo-router";
+// Web Alert.alert shim — must load before any screen renders
+import "../setup/alert-shim";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View, StyleSheet } from "react-native";

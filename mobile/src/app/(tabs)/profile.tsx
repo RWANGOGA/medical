@@ -20,16 +20,15 @@ export default function ProfileScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const handleLogout = async () => {
+    // Web note: Alert.alert is shimmed to window.confirm via src/setup/alert-shim.ts
+    const doLogout = async () => {
+      await logout();
+      router.replace("/(tabs)");
+    };
+
     Alert.alert("Log Out", "Are you sure you want to log out?", [
       { text: "Cancel", style: "cancel" },
-      {
-        text: "Log Out",
-        style: "destructive",
-        onPress: async () => {
-          await logout();
-          router.replace("/(tabs)");
-        },
-      },
+      { text: "Log Out", style: "destructive", onPress: doLogout },
     ]);
   };
 
