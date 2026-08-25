@@ -32,6 +32,24 @@ class PatientCreate(BaseModel):
     antibiotic_timeline: List[dict] = []
 
 
+class PatientUpdate(BaseModel):
+    name: Optional[str] = None
+    national_id: Optional[str] = None
+    hospital: Optional[str] = None
+    age: Optional[int] = None
+    sex: Optional[str] = None
+    weight_kg: Optional[float] = None
+    pregnancy_status: Optional[str] = None
+    allergies: Optional[List[str]] = None
+    renal_function: Optional[str] = None
+    liver_function: Optional[str] = None
+    immunocompromised: Optional[bool] = None
+    diagnosis: Optional[str] = None
+    infection_site: Optional[str] = None
+    culture_results: Optional[str] = None
+    antibiotic_timeline: Optional[List[dict]] = None
+
+
 class DuplicateCheckRequest(BaseModel):
     name: str
     age: Optional[int] = None
@@ -104,6 +122,28 @@ def create_patient(
         culture_results=payload.culture_results or "",
         antibiotic_timeline=payload.antibiotic_timeline,
     )
+    session.add(patient)
+    session.commit()
+    session.refresh(patient)
+    return patient
+
+
+@router.put("/{patient_id}", response_model=Patient)
+def update_patient(
+    patient_id: int,
+    payload: PatientUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    patient = session.get(Patient, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    # Apply only the fields that were provided
+    updates = payload.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(patient, field, value)
+
     session.add(patient)
     session.commit()
     session.refresh(patient)

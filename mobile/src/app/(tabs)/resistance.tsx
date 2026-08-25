@@ -1,16 +1,16 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { StyleSheet, Text, View, ScrollView, Dimensions, ActivityIndicator, TouchableOpacity } from "react-native";
+import { StyleSheet, Text, View, ScrollView, useWindowDimensions, ActivityIndicator, TouchableOpacity } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Circle, Line, Rect, Text as SvgText } from "react-native-svg";
 import { api } from "../../services/api";
-import { BRANDING } from "../../constants/branding";
+import { Palette } from "../../constants/branding";
+import { useTheme } from "../../context/ThemeContext";
+import { CONTENT_MAX_WIDTH } from "../../components/screen";
 
-const W = Dimensions.get("window").width - 64;
 const H = 220;
 const MAX = 60;
 const L = 34, R = 12, T = 12, B = 30;
-const IW = W - L - R, IH = H - T - B;
-const y = (v: number) => T + IH - (v / MAX) * IH;
 const ALL = "All Hospitals";
 
 const WHO: Record<string, string> = {
@@ -19,21 +19,22 @@ const WHO: Record<string, string> = {
   "P. aeruginosa": "CRITICAL",
   "S. aureus": "HIGH",
 };
-const whoColor = (p: string) => (p === "CRITICAL" ? BRANDING.colors.reserve : BRANDING.colors.watch);
 
-function LineChart({ years, series }: any) {
+function LineChart({ years, series, W, colors }: any) {
+  const IW = W - L - R, IH = H - T - B;
+  const y = (v: number) => T + IH - (v / MAX) * IH;
   const x = (i: number) => L + (i / Math.max(years.length - 1, 1)) * IW;
   return (
     <View>
       <Svg width={W} height={H}>
         {[0, 15, 30, 45, 60].map((t) => (
           <React.Fragment key={t}>
-            <Line x1={L} y1={y(t)} x2={W - R} y2={y(t)} stroke="#E2E8F0" strokeWidth={1} />
-            <SvgText x={L - 6} y={y(t) + 4} fontSize={10} fill="#64748B" textAnchor="end">{t}</SvgText>
+            <Line x1={L} y1={y(t)} x2={W - R} y2={y(t)} stroke={colors.border} strokeWidth={1} />
+            <SvgText x={L - 6} y={y(t) + 4} fontSize={10} fill={colors.subtext} textAnchor="end">{t}</SvgText>
           </React.Fragment>
         ))}
         {years.map((yr: string, i: number) => (
-          <SvgText key={yr} x={x(i)} y={H - 8} fontSize={10} fill="#64748B" textAnchor="middle">{yr}</SvgText>
+          <SvgText key={yr} x={x(i)} y={H - 8} fontSize={10} fill={colors.subtext} textAnchor="middle">{yr}</SvgText>
         ))}
         {series.map((s: any) => (
           <React.Fragment key={s.name}>
@@ -42,11 +43,11 @@ function LineChart({ years, series }: any) {
           </React.Fragment>
         ))}
       </Svg>
-      <View style={styles.legendRow}>
+      <View style={stylesStatic.legendRow}>
         {series.map((s: any) => (
-          <View key={s.name} style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: s.color }]} />
-            <Text style={styles.legendText}>{s.name}</Text>
+          <View key={s.name} style={stylesStatic.legendItem}>
+            <View style={[stylesStatic.legendDot, { backgroundColor: s.color }]} />
+            <Text style={{ fontSize: 11, color: colors.subtext }}>{s.name}</Text>
           </View>
         ))}
       </View>
@@ -54,14 +55,14 @@ function LineChart({ years, series }: any) {
   );
 }
 
-function TrendDeltas({ trends }: any) {
+function TrendDeltas({ trends, colors, styles }: any) {
   if (!trends || trends.length < 2) return null;
   const last = trends[trends.length - 1];
   const prev = trends[trends.length - 2];
   const rows = [
-    { name: "ESBL E. coli", color: BRANDING.colors.primary, v: last.esbl_ecoli, d: last.esbl_ecoli - prev.esbl_ecoli },
-    { name: "MRSA", color: BRANDING.colors.watch, v: last.mrsa, d: last.mrsa - prev.mrsa },
-    { name: "CRE", color: BRANDING.colors.reserve, v: last.cre, d: last.cre - prev.cre },
+    { name: "ESBL E. coli", color: colors.primary, v: last.esbl_ecoli, d: last.esbl_ecoli - prev.esbl_ecoli },
+    { name: "MRSA", color: colors.watch, v: last.mrsa, d: last.mrsa - prev.mrsa },
+    { name: "CRE", color: colors.reserve, v: last.cre, d: last.cre - prev.cre },
   ];
   return (
     <View style={styles.deltaRow}>
@@ -69,8 +70,8 @@ function TrendDeltas({ trends }: any) {
         <View key={r.name} style={styles.deltaChip}>
           <Text style={[styles.deltaName, { color: r.color }]}>{r.name}</Text>
           <Text style={styles.deltaValue}>{r.v}%</Text>
-          <Text style={{ color: r.d > 0 ? BRANDING.colors.reserve : r.d < 0 ? BRANDING.colors.access : BRANDING.colors.subtext, fontWeight: "800", fontSize: 10 }}>
-            {r.d > 0 ? `▲ +${r.d}` : r.d < 0 ? `▼ ${r.d}` : "• 0"} vs {prev.year}
+          <Text style={{ color: r.d > 0 ? colors.reserve : r.d < 0 ? colors.access : colors.subtext, fontWeight: "800", fontSize: 10 }}>
+            {r.d > 0 ? `+${r.d}` : r.d < 0 ? `${r.d}` : "0"} vs {prev.year}
           </Text>
         </View>
       ))}
@@ -78,15 +79,18 @@ function TrendDeltas({ trends }: any) {
   );
 }
 
-function BarChart({ items }: any) {
+function BarChart({ items, W, colors }: any) {
+  const IW = W - L - R, IH = H - T - B;
+  const y = (v: number) => T + IH - (v / MAX) * IH;
+  const whoColor = (p: string) => (p === "CRITICAL" ? colors.reserve : colors.watch);
   const gap = IW / items.length;
   const barW = gap * 0.6;
   return (
     <Svg width={W} height={H}>
       {[0, 15, 30, 45, 60].map((t) => (
         <React.Fragment key={t}>
-          <Line x1={L} y1={y(t)} x2={W - R} y2={y(t)} stroke="#E2E8F0" strokeWidth={1} />
-          <SvgText x={L - 6} y={y(t) + 4} fontSize={10} fill="#64748B" textAnchor="end">{t}</SvgText>
+          <Line x1={L} y1={y(t)} x2={W - R} y2={y(t)} stroke={colors.border} strokeWidth={1} />
+          <SvgText x={L - 6} y={y(t) + 4} fontSize={10} fill={colors.subtext} textAnchor="end">{t}</SvgText>
         </React.Fragment>
       ))}
       {items.map((it: any, i: number) => {
@@ -95,7 +99,7 @@ function BarChart({ items }: any) {
         return (
           <React.Fragment key={it.label}>
             <Rect x={bx} y={by} width={barW} height={T + IH - by} fill={whoColor(WHO[it.label] || "HIGH")} rx={4} />
-            <SvgText x={bx + barW / 2} y={H - 8} fontSize={9} fill="#64748B" textAnchor="middle">{it.label}</SvgText>
+            <SvgText x={bx + barW / 2} y={H - 8} fontSize={9} fill={colors.subtext} textAnchor="middle">{it.label}</SvgText>
           </React.Fragment>
         );
       })}
@@ -103,7 +107,7 @@ function BarChart({ items }: any) {
   );
 }
 
-function EmpiricChecker({ stats }: any) {
+function EmpiricChecker({ stats, colors, styles }: any) {
   const [org, setOrg] = useState("E. coli");
   if (!stats) return null;
   const drugs = stats.drugs
@@ -111,7 +115,7 @@ function EmpiricChecker({ stats }: any) {
     .filter((c: any) => c.n > 0)
     .sort((a: any, b: any) => b.pct_s - a.pct_s);
   const good = drugs.filter((c: any) => c.pct_s >= 90);
-  const color = (p: number) => (p >= 90 ? BRANDING.colors.access : p >= 70 ? BRANDING.colors.watch : BRANDING.colors.reserve);
+  const color = (p: number) => (p >= 90 ? colors.access : p >= 70 ? colors.watch : colors.reserve);
 
   return (
     <View>
@@ -130,7 +134,7 @@ function EmpiricChecker({ stats }: any) {
           <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
             <Text style={styles.empDrug}>{c.drug}</Text>
             <Text style={[styles.empPct, { color: color(c.pct_s) }]}>
-              {c.pct_s}% S {c.n < 30 ? " ⚠" : ""}
+              {c.pct_s}% S{c.n < 30 ? " (low n)" : ""}
             </Text>
           </View>
           <View style={styles.barTrack}>
@@ -140,11 +144,11 @@ function EmpiricChecker({ stats }: any) {
         </View>
       ))}
 
-      <View style={[styles.verdict, { backgroundColor: (good.length ? BRANDING.colors.access : BRANDING.colors.reserve) + "15" }]}>
-        <Text style={{ fontSize: 12, color: BRANDING.colors.text, lineHeight: 18 }}>
+      <View style={[styles.verdict, { backgroundColor: (good.length ? colors.access : colors.reserve) + "18" }]}>
+        <Text style={{ fontSize: 12, color: colors.text, lineHeight: 18 }}>
           {good.length
-            ? `✅ Reliable empiric options for ${org}: ${good.map((g: any) => g.drug).join(", ")} (≥90% susceptible).`
-            : `⛔ No agent reaches ≥90% susceptibility for ${org}. Get cultures before empiric escalation.`}
+            ? `Reliable empiric options for ${org}: ${good.map((g: any) => g.drug).join(", ")} (90% or more susceptible).`
+            : `No agent reaches 90% susceptibility for ${org}. Obtain cultures before empiric escalation.`}
         </Text>
       </View>
     </View>
@@ -152,6 +156,15 @@ function EmpiricChecker({ stats }: any) {
 }
 
 export default function ResistanceScreen() {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  // Chart width adapts to the screen but stays readable on wide displays
+  const contentWidth = Math.min(width, CONTENT_MAX_WIDTH);
+  const W = contentWidth - 64;
+
   const [hospital, setHospital] = useState(ALL);
   const active = hospital === ALL ? undefined : hospital;
 
@@ -160,14 +173,15 @@ export default function ResistanceScreen() {
   const { data: organisms, isLoading: lo } = useQuery({ queryKey: ["organisms"], queryFn: api.getOrganisms });
   const { data: stats, isLoading: la } = useQuery({ queryKey: ["abx-stats", hospital], queryFn: () => api.getAntibiogramStats(active) });
 
-  const getSirColor = (val: string) => (val === "S" ? BRANDING.colors.access : val === "I" ? BRANDING.colors.watch : val === "R" ? BRANDING.colors.reserve : "#94A3B8");
+  const whoColor = (p: string) => (p === "CRITICAL" ? colors.reserve : colors.watch);
+  const getSirColor = (val: string) => (val === "S" ? colors.access : val === "I" ? colors.watch : val === "R" ? colors.reserve : colors.subtext);
   const letter = (c: any) => (c.n === 0 ? "-" : c.s >= c.i && c.s >= c.r ? "S" : c.i >= c.r ? "I" : "R");
 
   const years = trends?.map((t: any) => t.year) || [];
   const series = [
-    { name: "ESBL E. coli", color: BRANDING.colors.primary, data: trends?.map((t: any) => t.esbl_ecoli) || [] },
-    { name: "MRSA", color: BRANDING.colors.watch, data: trends?.map((t: any) => t.mrsa) || [] },
-    { name: "CRE", color: BRANDING.colors.reserve, data: trends?.map((t: any) => t.cre) || [] },
+    { name: "ESBL E. coli", color: colors.primary, data: trends?.map((t: any) => t.esbl_ecoli) || [] },
+    { name: "MRSA", color: colors.watch, data: trends?.map((t: any) => t.mrsa) || [] },
+    { name: "CRE", color: colors.reserve, data: trends?.map((t: any) => t.cre) || [] },
   ];
   const bars = (organisms || []).map((o: any) => ({
     label: o.name.includes("coli") ? "E. coli" : o.name.includes("pneumo") ? "K. pneumoniae" : o.name.includes("aureus") ? "S. aureus" : "P. aeruginosa",
@@ -176,9 +190,11 @@ export default function ResistanceScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 90 }}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Resistance Dashboard</Text>
-        <Text style={styles.subtitle}>Live surveillance from your database</Text>
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+        <View style={styles.headerInner}>
+          <Text style={styles.title}>Resistance Dashboard</Text>
+          <Text style={styles.subtitle}>Surveillance data from recorded laboratory results</Text>
+        </View>
       </View>
 
       {/* Hospital filter */}
@@ -190,100 +206,113 @@ export default function ResistanceScreen() {
         ))}
       </ScrollView>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>RESISTANCE TRENDS OVER TIME (%)</Text>
-        {lt ? <ActivityIndicator /> : (
-          <View>
-            <LineChart years={years} series={series} />
-            <TrendDeltas trends={trends} />
-          </View>
-        )}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>MOST RESISTANT ORGANISMS — WHO PRIORITY</Text>
-        {lo ? <ActivityIndicator /> : <BarChart items={bars} />}
-        <View style={styles.legendRow}>
-          {Object.keys(WHO).map((o) => (
-            <View key={o} style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: whoColor(WHO[o]) }]} />
-              <Text style={styles.legendText}>{o} · {WHO[o]}</Text>
+      <View style={styles.contentColumn}>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Resistance trends over time (%)</Text>
+          {lt ? <ActivityIndicator color={colors.primary} /> : (
+            <View>
+              <LineChart years={years} series={series} W={W} colors={colors} />
+              <TrendDeltas trends={trends} colors={colors} styles={styles} />
             </View>
-          ))}
+          )}
         </View>
-      </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>HOSPITAL ANTIBIOGRAM — %S WITH ISOLATE COUNTS</Text>
-        {la ? <ActivityIndicator /> : (
-          <View>
-            <View style={styles.heatRow}>
-              <View style={styles.heatHeaderCell} />
-              {stats?.drugs.map((d: string) => (
-                <View key={d} style={styles.heatHeaderCell}><Text style={styles.heatHeaderText} numberOfLines={1}>{d}</Text></View>
-              ))}
-            </View>
-            {stats?.organisms.map((org: string) => (
-              <View key={org} style={styles.heatRow}>
-                <View style={styles.heatHeaderCell}><Text style={styles.orgName} numberOfLines={1}>{org}</Text></View>
-                {stats?.drugs.map((d: string) => {
-                  const c = stats.cells[org][d];
-                  const val = letter(c);
-                  return (
-                    <View key={d} style={[styles.heatCell, { backgroundColor: getSirColor(val) + "20" }]}>
-                      <Text style={[styles.heatCellText, { color: getSirColor(val) }]}>{val}</Text>
-                      <Text style={styles.heatN}>{c.n > 0 ? `n=${c.n}` : ""}{c.n > 0 && c.n < 30 ? " ⚠" : ""}</Text>
-                    </View>
-                  );
-                })}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Most resistant organisms — WHO priority</Text>
+          {lo ? <ActivityIndicator color={colors.primary} /> : <BarChart items={bars} W={W} colors={colors} />}
+          <View style={stylesStatic.legendRow}>
+            {Object.keys(WHO).map((o) => (
+              <View key={o} style={stylesStatic.legendItem}>
+                <View style={[stylesStatic.legendDot, { backgroundColor: whoColor(WHO[o]) }]} />
+                <Text style={{ fontSize: 11, color: colors.subtext }}>{o} · {WHO[o]}</Text>
               </View>
             ))}
-            <Text style={styles.footnote}>⚠ Fewer than 30 isolates — interpret with caution (CLSI M39). %S shown in Empiric Checker below.</Text>
           </View>
-        )}
-      </View>
+        </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>EMPIRIC THERAPY CHECKER (≥90% RULE)</Text>
-        {la ? <ActivityIndicator /> : <EmpiricChecker stats={stats} />}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Hospital antibiogram — %S with isolate counts</Text>
+          {la ? <ActivityIndicator color={colors.primary} /> : (
+            <View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View>
+                  <View style={styles.heatRow}>
+                    <View style={styles.heatHeaderCell} />
+                    {stats?.drugs.map((d: string) => (
+                      <View key={d} style={styles.heatHeaderCell}><Text style={styles.heatHeaderText} numberOfLines={1}>{d}</Text></View>
+                    ))}
+                  </View>
+                  {stats?.organisms.map((org: string) => (
+                    <View key={org} style={styles.heatRow}>
+                      <View style={styles.heatHeaderCell}><Text style={styles.orgName} numberOfLines={1}>{org}</Text></View>
+                      {stats?.drugs.map((d: string) => {
+                        const c = stats.cells[org][d];
+                        const val = letter(c);
+                        return (
+                          <View key={d} style={[styles.heatCell, { backgroundColor: getSirColor(val) + "20" }]}>
+                            <Text style={[styles.heatCellText, { color: getSirColor(val) }]}>{val}</Text>
+                            <Text style={styles.heatN}>{c.n > 0 ? `n=${c.n}` : ""}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+              <Text style={styles.footnote}>Fewer than 30 isolates: interpret with caution (CLSI M39). %S shown in the empiric checker below.</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Empiric therapy checker (90% rule)</Text>
+          {la ? <ActivityIndicator color={colors.primary} /> : <EmpiricChecker stats={stats} colors={colors} styles={styles} />}
+        </View>
       </View>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BRANDING.colors.background },
-  header: { backgroundColor: BRANDING.colors.surface, padding: 20, paddingTop: 60, borderBottomWidth: 1, borderBottomColor: BRANDING.colors.border },
-  title: { fontSize: 22, fontWeight: "800", color: BRANDING.colors.text },
-  subtitle: { color: BRANDING.colors.subtext, marginTop: 4 },
-  chipRow: { maxHeight: 46, borderBottomWidth: 1, borderBottomColor: BRANDING.colors.border, flexGrow: 0 },
-  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: BRANDING.colors.surface, borderWidth: 1, borderColor: BRANDING.colors.border },
-  chipActive: { backgroundColor: BRANDING.colors.primary, borderColor: BRANDING.colors.primary },
-  chipText: { fontSize: 12, color: BRANDING.colors.text },
-  chipTextActive: { color: "#fff", fontWeight: "700" },
-  card: { backgroundColor: BRANDING.colors.surface, margin: 16, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: BRANDING.colors.border },
-  cardTitle: { fontSize: 12, fontWeight: "700", color: BRANDING.colors.subtext, letterSpacing: 0.5, marginBottom: 12 },
+// Layout-only styles shared with chart legends (no colors)
+const stylesStatic = StyleSheet.create({
   legendRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 12, marginTop: 8 },
   legendItem: { flexDirection: "row", alignItems: "center" },
   legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: 6 },
-  legendText: { fontSize: 11, color: BRANDING.colors.subtext },
-  deltaRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 10 },
-  deltaChip: { flex: 1, alignItems: "center", backgroundColor: BRANDING.colors.background, borderRadius: 10, padding: 8, marginHorizontal: 3 },
-  deltaName: { fontSize: 10, fontWeight: "700" },
-  deltaValue: { fontSize: 16, fontWeight: "800", color: BRANDING.colors.text, marginTop: 2 },
-  heatRow: { flexDirection: "row", marginBottom: 8 },
-  heatHeaderCell: { flex: 1, justifyContent: "center", alignItems: "center", padding: 4 },
-  heatHeaderText: { fontSize: 10, fontWeight: "700", color: BRANDING.colors.subtext, textTransform: "uppercase" },
-  orgName: { fontSize: 11, fontWeight: "700", fontStyle: "italic", color: BRANDING.colors.text },
-  heatCell: { flex: 1, height: 42, justifyContent: "center", alignItems: "center", borderRadius: 8, marginHorizontal: 2 },
-  heatCellText: { fontSize: 14, fontWeight: "800" },
-  heatN: { fontSize: 8, color: BRANDING.colors.subtext },
-  footnote: { fontSize: 10, color: BRANDING.colors.subtext, marginTop: 8, fontStyle: "italic" },
-  empRow: { marginBottom: 12 },
-  empDrug: { fontSize: 13, fontWeight: "700", color: BRANDING.colors.text },
-  empPct: { fontSize: 12, fontWeight: "800" },
-  barTrack: { height: 8, backgroundColor: BRANDING.colors.background, borderRadius: 4, marginTop: 4, overflow: "hidden" },
-  barFill: { height: 8, borderRadius: 4 },
-  empN: { fontSize: 9, color: BRANDING.colors.subtext, marginTop: 2 },
-  verdict: { borderRadius: 10, padding: 10, marginTop: 6 },
 });
+
+function makeStyles(c: Palette) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    header: { backgroundColor: c.surface, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: c.border },
+    headerInner: { paddingHorizontal: 20, width: "100%", maxWidth: CONTENT_MAX_WIDTH, alignSelf: "center" },
+    title: { fontSize: 22, fontWeight: "800", color: c.text },
+    subtitle: { color: c.subtext, marginTop: 4, fontSize: 13 },
+    chipRow: { maxHeight: 46, borderBottomWidth: 1, borderBottomColor: c.border, flexGrow: 0 },
+    chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border },
+    chipActive: { backgroundColor: c.primary, borderColor: c.primary },
+    chipText: { fontSize: 12, color: c.text },
+    chipTextActive: { color: c.onPrimary, fontWeight: "700" },
+    contentColumn: { width: "100%", maxWidth: CONTENT_MAX_WIDTH, alignSelf: "center" },
+    card: { backgroundColor: c.surface, margin: 16, marginBottom: 0, marginTop: 16, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: c.border },
+    cardTitle: { fontSize: 12, fontWeight: "700", color: c.subtext, letterSpacing: 0.5, marginBottom: 12, textTransform: "uppercase" },
+    deltaRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 10, flexWrap: "wrap", gap: 6 },
+    deltaChip: { flex: 1, minWidth: 90, alignItems: "center", backgroundColor: c.background, borderRadius: 10, padding: 8, marginHorizontal: 3 },
+    deltaName: { fontSize: 10, fontWeight: "700" },
+    deltaValue: { fontSize: 16, fontWeight: "800", color: c.text, marginTop: 2 },
+    heatRow: { flexDirection: "row", marginBottom: 8 },
+    heatHeaderCell: { flex: 1, minWidth: 44, justifyContent: "center", alignItems: "center", padding: 4 },
+    heatHeaderText: { fontSize: 10, fontWeight: "700", color: c.subtext, textTransform: "uppercase" },
+    orgName: { fontSize: 11, fontWeight: "700", fontStyle: "italic", color: c.text },
+    heatCell: { flex: 1, minWidth: 44, height: 42, justifyContent: "center", alignItems: "center", borderRadius: 8, marginHorizontal: 2 },
+    heatCellText: { fontSize: 14, fontWeight: "800" },
+    heatN: { fontSize: 8, color: c.subtext },
+    footnote: { fontSize: 10, color: c.subtext, marginTop: 8 },
+    empRow: { marginBottom: 12 },
+    empDrug: { fontSize: 13, fontWeight: "700", color: c.text },
+    empPct: { fontSize: 12, fontWeight: "800" },
+    barTrack: { height: 8, backgroundColor: c.background, borderRadius: 4, marginTop: 4, overflow: "hidden" },
+    barFill: { height: 8, borderRadius: 4 },
+    empN: { fontSize: 9, color: c.subtext, marginTop: 2 },
+    verdict: { borderRadius: 10, padding: 10, marginTop: 6 },
+  });
+}

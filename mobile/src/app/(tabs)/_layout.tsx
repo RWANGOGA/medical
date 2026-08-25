@@ -1,19 +1,28 @@
 import { Tabs } from "expo-router";
-import { BRANDING } from "../../constants/branding";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
 
 export default function TabLayout() {
   const { isAuthenticated } = useAuth();
+  const { colors } = useTheme();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: BRANDING.colors.primary,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.subtext,
         tabBarLabelStyle: { fontSize: 10, fontWeight: "600" },
-        headerStyle: { backgroundColor: BRANDING.colors.primary },
-        headerTintColor: "#fff",
-        headerTitleStyle: { fontWeight: "bold" },
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        },
+        headerStyle: { backgroundColor: colors.surface },
+        headerTintColor: colors.text,
+        headerTitleStyle: { fontWeight: "700" },
+        headerShadowVisible: false,
+        headerShown: false,
+        sceneStyle: { backgroundColor: colors.background },
       }}
     >
       <Tabs.Screen 

@@ -38,10 +38,10 @@ Your role:
 def chat(payload: ChatRequest):
     api_key = os.getenv("GROQ_API_KEY")
 
-    # Graceful demo mode if no key is configured yet
+    # Graceful fallback if no key is configured yet
     if not api_key:
         return ChatResponse(
-            reply="🤖 The AI Assistant is in DEMO MODE. To enable live Groq-powered clinical reasoning, add your GROQ_API_KEY to the environment. In the meantime, explore the organism, antibiotic, and resistance data across the app!"
+            reply="The clinical assistant is currently unavailable. Please explore the organism, antibiotic, and resistance reference data across the app, and try again later."
         )
 
     model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")

@@ -48,6 +48,8 @@ export const api = {
   getPatientById: (id: string | number) => request<any>(`/patients/${id}`),
   createPatient: (payload: any) =>
     request<any>("/patients/", { method: "POST", body: JSON.stringify(payload) }),
+  updatePatient: (id: string | number, payload: any) =>
+    request<any>(`/patients/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   
   // Duplicate check
   checkDuplicate: (payload: any) =>

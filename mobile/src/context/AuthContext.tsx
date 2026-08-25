@@ -6,6 +6,7 @@ import { api, setAuthToken, getStoredToken } from "../services/api";
 interface User {
   id: number;
   username: string;
+  email?: string;
   full_name: string;
   role: string;
   hospital: string;
