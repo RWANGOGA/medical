@@ -79,6 +79,16 @@ function AssistantSheet({ open, onClose }: { open: boolean; onClose: () => void 
     if (open) scrollRef.current?.scrollToEnd({ animated: true });
   }, [messages, loading, open]);
 
+  // Bubbles render plain text only — strip any Markdown the model slips in
+  const sanitize = (t: string) =>
+    t
+      .replace(/\*\*(.+?)\*\*/g, "$1")
+      .replace(/(^|\n)#{1,6}\s+/g, "$1")
+      .replace(/\*\*/g, "")
+      .replace(/`([^`]*)`/g, "$1")
+      .replace(/[ \t]{2,}\n/g, "\n")
+      .trim();
+
   const send = async () => {
     const text = input.trim();
     if (!text || loading) return;
@@ -90,7 +100,7 @@ function AssistantSheet({ open, onClose }: { open: boolean; onClose: () => void 
       const res = await api.sendAssistantMessage(
         next.map((m) => ({ role: m.role, content: m.text }))
       );
-      setMessages((cur) => [...cur, { role: "assistant", text: res.reply }]);
+      setMessages((cur) => [...cur, { role: "assistant", text: sanitize(res.reply) }]);
     } catch {
       setMessages((cur) => [...cur, { role: "assistant", text: "The assistant is currently unavailable. Please try again." }]);
     } finally {
