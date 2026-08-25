@@ -4,6 +4,7 @@ import {
   ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../services/api";
 import { Palette } from "../constants/branding";
 import { useTheme } from "./ThemeContext";
@@ -23,8 +24,43 @@ export function AssistantProvider({ children }: { children: React.ReactNode }) {
   return (
     <AssistantContext.Provider value={{ openAssistant: () => setOpen(true) }}>
       {children}
+
+      {/* Floating chatbot button — always visible on top of every screen */}
+      {!open && <AssistantFab onPress={() => setOpen(true)} />}
+
       <AssistantSheet open={open} onClose={() => setOpen(false)} />
     </AssistantContext.Provider>
+  );
+}
+
+function AssistantFab({ onPress }: { onPress: () => void }) {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  return (
+    <TouchableOpacity
+      style={{
+        position: "absolute",
+        top: insets.top + 8,
+        right: 16,
+        zIndex: 1000,
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: colors.primary,
+        justifyContent: "center",
+        alignItems: "center",
+        shadowColor: "#000",
+        shadowOpacity: 0.25,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 8,
+      }}
+      onPress={onPress}
+      activeOpacity={0.85}
+      accessibilityLabel="Open clinical assistant"
+    >
+      <Ionicons name="chatbubble-ellipses" size={20} color={colors.onPrimary} />
+    </TouchableOpacity>
   );
 }
 
