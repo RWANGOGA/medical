@@ -37,7 +37,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def get_current_user(
+async def get_current_user(
     token: Optional[str] = Depends(oauth2_scheme),
     session: Session = Depends(get_session),
 ) -> User:
@@ -61,6 +61,8 @@ def get_current_user(
     if user is None:
         raise credentials_exception
 
-    # Let the audit trail know WHO is performing the action
+    # Let the audit trail know WHO is performing the action.
+    # Must happen in the request (event-loop) context so sync endpoints
+    # running in threadpool workers inherit it via their copied context.
     set_audit_user(user)
     return user

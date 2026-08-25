@@ -1,13 +1,17 @@
 import { Stack, useRouter, useSegments } from "expo-router";
+// Web Alert.alert shim — must load before any screen renders
+import "../setup/alert-shim";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View, StyleSheet } from "react-native";
-import { BRANDING } from "../constants/branding";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { AssistantProvider } from "../context/AssistantContext";
+import { ThemeProvider, useTheme } from "../context/ThemeContext";
+import { ApiError } from "../services/api";
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
+  const { colors } = useTheme();
   const router = useRouter();
   const segments = useSegments();
 
@@ -32,8 +36,8 @@ function AppContent() {
 
   if (isLoading) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" color={BRANDING.colors.primary} />
+      <View style={[styles.loading, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -42,14 +46,27 @@ function AppContent() {
 }
 
 export default function RootLayout() {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            // Auth failures are handled by the auth flow; retrying just spams 401s
+            retry: (failureCount, error) =>
+              (error as ApiError)?.status !== 401 && failureCount < 2,
+          },
+        },
+      })
+  );
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AssistantProvider>
-          <AppContent />
-        </AssistantProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AssistantProvider>
+            <AppContent />
+          </AssistantProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
@@ -59,6 +76,5 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: BRANDING.colors.background,
   },
 });

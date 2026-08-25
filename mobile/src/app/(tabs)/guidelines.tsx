@@ -5,8 +5,10 @@ import {
   StyleSheet, Text, View, ScrollView, TouchableOpacity,
   ActivityIndicator, LayoutAnimation, Platform, UIManager,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../../services/api";
-import { BRANDING } from "../../constants/branding";
+import { Palette } from "../../constants/branding";
+import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -39,8 +41,216 @@ interface Guideline {
   summary: string;
 }
 
+function makeStyles(c: Palette) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    header: {
+      backgroundColor: c.surface,
+      padding: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+    },
+    headerInner: {
+      maxWidth: 720,
+      width: "100%",
+      alignSelf: "center",
+    },
+    title: { fontSize: 22, fontWeight: "800", color: c.text },
+    subtitle: { color: c.subtext, marginTop: 4, fontSize: 13 },
+    column: {
+      maxWidth: 720,
+      width: "100%",
+      alignSelf: "center",
+    },
+    sectionTitle: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: c.subtext,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginHorizontal: 16,
+      marginTop: 20,
+      marginBottom: 10,
+    },
+    emptyText: {
+      fontSize: 12,
+      color: c.subtext,
+      textAlign: "center",
+      marginTop: 16,
+      fontStyle: "italic",
+    },
+
+    // Guideline card
+    guidelineCard: {
+      backgroundColor: c.surface,
+      marginHorizontal: 16,
+      marginBottom: 10,
+      padding: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    guidelineHeader: { flexDirection: "row", alignItems: "flex-start", marginBottom: 8 },
+    guidelineIconContainer: {
+      width: 28,
+      height: 28,
+      borderRadius: 7,
+      backgroundColor: c.primarySoft,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 10,
+    },
+    guidelineTitleContainer: { flex: 1, marginRight: 8 },
+    guidelineTitle: {
+      fontSize: 13.5,
+      fontWeight: "700",
+      color: c.text,
+      lineHeight: 18,
+    },
+    guidelineMeta: {
+      fontSize: 10.5,
+      color: c.primary,
+      marginTop: 2,
+      fontWeight: "600",
+    },
+    guidelineSummary: {
+      fontSize: 12.5,
+      color: c.subtext,
+      lineHeight: 17,
+      paddingLeft: 38,
+    },
+
+    // Expanded content
+    expandedContent: { marginTop: 14, paddingLeft: 38 },
+    divider: {
+      height: 1,
+      backgroundColor: c.border,
+      marginBottom: 16,
+    },
+    loadingContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingVertical: 16,
+    },
+    loadingText: {
+      fontSize: 11.5,
+      color: c.subtext,
+      fontStyle: "italic",
+    },
+    errorContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingVertical: 12,
+    },
+    errorText: { fontSize: 11.5, color: c.reserve },
+
+    // Reference sections
+    refSection: { marginBottom: 16 },
+    refSectionHeader: {
+      flexDirection: "row",
+      alignItems: "baseline",
+      marginBottom: 5,
+    },
+    refSectionIndex: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: c.primary,
+      marginRight: 8,
+      fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    },
+    refSectionHeading: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: c.text,
+      textTransform: "uppercase",
+      letterSpacing: 0.3,
+      flex: 1,
+    },
+    refSectionBody: {
+      fontSize: 12.5,
+      color: c.text,
+      lineHeight: 18,
+      marginBottom: 6,
+    },
+    bulletList: { marginTop: 6, paddingLeft: 2 },
+    bulletItem: { flexDirection: "row", marginBottom: 4 },
+    bulletDot: {
+      width: 3.5,
+      height: 3.5,
+      borderRadius: 2,
+      backgroundColor: c.primary,
+      marginTop: 6.5,
+      marginRight: 7,
+    },
+    bulletText: {
+      fontSize: 12,
+      color: c.text,
+      lineHeight: 17,
+      flex: 1,
+    },
+    referencesContainer: {
+      marginTop: 16,
+      paddingTop: 14,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+    },
+    referencesLabel: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: c.subtext,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 6,
+    },
+    referenceText: {
+      fontSize: 11,
+      color: c.subtext,
+      lineHeight: 16,
+      marginBottom: 3,
+    },
+
+    // Existing card styles
+    card: {
+      backgroundColor: c.surface,
+      marginHorizontal: 16,
+      marginBottom: 10,
+      padding: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    cardHeader: { flexDirection: "row", alignItems: "center" },
+    orgName: {
+      fontSize: 14,
+      fontWeight: "700",
+      fontStyle: "italic",
+      color: c.text,
+    },
+    orgGram: { fontSize: 11.5, color: c.subtext, marginTop: 2 },
+    badge: {
+      backgroundColor: c.dangerSoft,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+    },
+    badgeText: {
+      color: c.reserve,
+      fontWeight: "800",
+      fontSize: 10.5,
+    },
+    importance: {
+      fontSize: 12,
+      color: c.subtext,
+      marginTop: 10,
+      lineHeight: 17,
+    },
+  });
+}
+
 // --- Reference section renderer ---
-function ReferenceSection({ section, index }: { section: Section; index: string }) {
+function ReferenceSection({ section, index, styles }: { section: Section; index: string; styles: any }) {
   return (
     <View style={styles.refSection}>
       <View style={styles.refSectionHeader}>
@@ -64,6 +274,8 @@ function ReferenceSection({ section, index }: { section: Section; index: string 
 
 // --- Expandable guideline card ---
 function GuidelineCard({ guideline }: { guideline: Guideline }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [expanded, setExpanded] = useState(false);
   const queryClient = useQueryClient();
 
@@ -87,7 +299,7 @@ function GuidelineCard({ guideline }: { guideline: Guideline }) {
     setExpanded(!expanded);
   };
 
-  const sections: { key: keyof ExpandedContent; index: string }[] = [
+  const sections: { key: Exclude<keyof ExpandedContent, "key_references">; index: string }[] = [
     { key: "clinical_context", index: "I" },
     { key: "diagnostic_approach", index: "II" },
     { key: "first_line_therapy", index: "III" },
@@ -105,7 +317,7 @@ function GuidelineCard({ guideline }: { guideline: Guideline }) {
         activeOpacity={0.8}
       >
         <View style={styles.guidelineIconContainer}>
-          <Ionicons name="book-outline" size={16} color={BRANDING.colors.primary} />
+          <Ionicons name="book-outline" size={16} color={colors.primary} />
         </View>
         <View style={styles.guidelineTitleContainer}>
           <Text style={styles.guidelineTitle} numberOfLines={expanded ? undefined : 2}>
@@ -118,7 +330,7 @@ function GuidelineCard({ guideline }: { guideline: Guideline }) {
         <Ionicons
           name={expanded ? "chevron-up" : "chevron-down"}
           size={16}
-          color={BRANDING.colors.subtext}
+          color={colors.subtext}
         />
       </TouchableOpacity>
 
@@ -130,8 +342,8 @@ function GuidelineCard({ guideline }: { guideline: Guideline }) {
 
           {mutation.isPending && !expandedContent && (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={BRANDING.colors.primary} />
-              <Text style={styles.loadingText}>Generating clinical reference…</Text>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.loadingText}>Preparing clinical reference…</Text>
             </View>
           )}
 
@@ -140,7 +352,7 @@ function GuidelineCard({ guideline }: { guideline: Guideline }) {
               style={styles.errorContainer}
               onPress={() => mutation.mutate()}
             >
-              <Ionicons name="alert-circle" size={14} color={BRANDING.colors.reserve} />
+              <Ionicons name="alert-circle" size={14} color={colors.reserve} />
               <Text style={styles.errorText}>Failed to load. Tap to retry.</Text>
             </TouchableOpacity>
           )}
@@ -152,6 +364,7 @@ function GuidelineCard({ guideline }: { guideline: Guideline }) {
                   key={key}
                   section={expandedContent[key]}
                   index={index}
+                  styles={styles}
                 />
               ))}
 
@@ -185,6 +398,10 @@ function stableId(input: string): string {
 
 // --- Main screen ---
 export default function GuidelinesScreen() {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   const { data: organisms, isLoading: lo } = useQuery({
     queryKey: ["organisms"],
     queryFn: api.getOrganisms,
@@ -212,276 +429,83 @@ export default function GuidelinesScreen() {
 
   const awareColor = (c: string) =>
     c === "Access"
-      ? BRANDING.colors.access
+      ? colors.access
       : c === "Watch"
-      ? BRANDING.colors.watch
-      : BRANDING.colors.reserve;
+      ? colors.watch
+      : colors.reserve;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 90 }}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Clinical Guidelines</Text>
-        <Text style={styles.subtitle}>
-          Treatment protocols, pathogen profiles & antibiotic reference
-        </Text>
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+        <View style={styles.headerInner}>
+          <Text style={styles.title}>Clinical Guidelines</Text>
+          <Text style={styles.subtitle}>
+            Treatment protocols, pathogen profiles and antibiotic reference
+          </Text>
+        </View>
       </View>
 
-      {/* Clinical Guidelines — Expandable */}
-      <Text style={styles.sectionTitle}>Treatment Protocols</Text>
-      {guidelines.length === 0 && (
-        <Text style={styles.emptyText}>Loading guidelines…</Text>
-      )}
-      {guidelines.map((g) => (
-        <GuidelineCard key={g.id} guideline={g} />
-      ))}
+      <View style={styles.column}>
+        {/* Clinical Guidelines — Expandable */}
+        <Text style={styles.sectionTitle}>Treatment Protocols</Text>
+        {guidelines.length === 0 && (
+          <Text style={styles.emptyText}>Loading guidelines…</Text>
+        )}
+        {guidelines.map((g) => (
+          <GuidelineCard key={g.id} guideline={g} />
+        ))}
 
-      {/* Pathogen Profiles */}
-      <Text style={styles.sectionTitle}>Pathogen Profiles</Text>
-      {lo ? (
-        <ActivityIndicator style={{ marginTop: 12 }} />
-      ) : (
-        organisms?.map((o: any) => (
-          <View key={o.id} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="bug-outline" size={22} color={BRANDING.colors.primary} />
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.orgName}>{o.name}</Text>
-                <Text style={styles.orgGram}>{o.gram}</Text>
+        {/* Pathogen Profiles */}
+        <Text style={styles.sectionTitle}>Pathogen Profiles</Text>
+        {lo ? (
+          <ActivityIndicator style={{ marginTop: 12 }} color={colors.primary} />
+        ) : (
+          organisms?.map((o: any) => (
+            <View key={o.id} style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Ionicons name="bug-outline" size={22} color={colors.primary} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.orgName}>{o.name}</Text>
+                  <Text style={styles.orgGram}>{o.gram}</Text>
+                </View>
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{o.resistance_rate}% R</Text>
+                </View>
               </View>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{o.resistance_rate}% R</Text>
-              </View>
+              <Text style={styles.importance}>{o.clinical_importance}</Text>
             </View>
-            <Text style={styles.importance}>{o.clinical_importance}</Text>
-          </View>
-        ))
-      )}
+          ))
+        )}
 
-      {/* Antibiotic Library */}
-      <Text style={styles.sectionTitle}>Antibiotic Library</Text>
-      {la ? (
-        <ActivityIndicator style={{ marginTop: 12 }} />
-      ) : (
-        antibiotics?.map((a: any) => (
-          <View key={a.id} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="medkit-outline" size={22} color={BRANDING.colors.primary} />
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.orgName}>{a.generic_name}</Text>
-                <Text style={styles.orgGram}>{a.drug_class}</Text>
+        {/* Antibiotic Library */}
+        <Text style={styles.sectionTitle}>Antibiotic Library</Text>
+        {la ? (
+          <ActivityIndicator style={{ marginTop: 12 }} color={colors.primary} />
+        ) : (
+          antibiotics?.map((a: any) => (
+            <View key={a.id} style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Ionicons name="medkit-outline" size={22} color={colors.primary} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.orgName}>{a.generic_name}</Text>
+                  <Text style={styles.orgGram}>{a.drug_class}</Text>
+                </View>
+                <View
+                  style={[
+                    styles.badge,
+                    { backgroundColor: awareColor(a.aware_category) + "20" },
+                  ]}
+                >
+                  <Text style={[styles.badgeText, { color: awareColor(a.aware_category) }]}>
+                    {a.aware_category}
+                  </Text>
+                </View>
               </View>
-              <View
-                style={[
-                  styles.badge,
-                  { backgroundColor: awareColor(a.aware_category) + "20" },
-                ]}
-              >
-                <Text style={[styles.badgeText, { color: awareColor(a.aware_category) }]}>
-                  {a.aware_category}
-                </Text>
-              </View>
+              <Text style={styles.importance}>{a.dosing_adult}</Text>
             </View>
-            <Text style={styles.importance}>{a.dosing_adult}</Text>
-          </View>
-        ))
-      )}
+          ))
+        )}
+      </View>
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BRANDING.colors.background },
-  header: {
-    backgroundColor: BRANDING.colors.surface,
-    padding: 20,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: BRANDING.colors.border,
-  },
-  title: { fontSize: 22, fontWeight: "800", color: BRANDING.colors.text },
-  subtitle: { color: BRANDING.colors.subtext, marginTop: 4, fontSize: 13 },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: BRANDING.colors.subtext,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginHorizontal: 16,
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  emptyText: {
-    fontSize: 12,
-    color: BRANDING.colors.subtext,
-    textAlign: "center",
-    marginTop: 16,
-    fontStyle: "italic",
-  },
-
-  // Guideline card
-  guidelineCard: {
-    backgroundColor: BRANDING.colors.surface,
-    marginHorizontal: 16,
-    marginBottom: 10,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BRANDING.colors.border,
-  },
-  guidelineHeader: { flexDirection: "row", alignItems: "flex-start", marginBottom: 8 },
-  guidelineIconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 7,
-    backgroundColor: BRANDING.colors.primary + "15",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 10,
-  },
-  guidelineTitleContainer: { flex: 1, marginRight: 8 },
-  guidelineTitle: {
-    fontSize: 13.5,
-    fontWeight: "700",
-    color: BRANDING.colors.text,
-    lineHeight: 18,
-  },
-  guidelineMeta: {
-    fontSize: 10.5,
-    color: BRANDING.colors.primary,
-    marginTop: 2,
-    fontWeight: "600",
-  },
-  guidelineSummary: {
-    fontSize: 12.5,
-    color: BRANDING.colors.subtext,
-    lineHeight: 17,
-    paddingLeft: 38,
-  },
-
-  // Expanded content
-  expandedContent: { marginTop: 14, paddingLeft: 38 },
-  divider: {
-    height: 1,
-    backgroundColor: BRANDING.colors.border,
-    marginBottom: 16,
-  },
-  loadingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 16,
-  },
-  loadingText: {
-    fontSize: 11.5,
-    color: BRANDING.colors.subtext,
-    fontStyle: "italic",
-  },
-  errorContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 12,
-  },
-  errorText: { fontSize: 11.5, color: BRANDING.colors.reserve },
-
-  // Reference sections
-  refSection: { marginBottom: 16 },
-  refSectionHeader: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    marginBottom: 5,
-  },
-  refSectionIndex: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: BRANDING.colors.primary,
-    marginRight: 8,
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-  },
-  refSectionHeading: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: BRANDING.colors.text,
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-    flex: 1,
-  },
-  refSectionBody: {
-    fontSize: 12.5,
-    color: BRANDING.colors.text,
-    lineHeight: 18,
-    marginBottom: 6,
-  },
-  bulletList: { marginTop: 6, paddingLeft: 2 },
-  bulletItem: { flexDirection: "row", marginBottom: 4 },
-  bulletDot: {
-    width: 3.5,
-    height: 3.5,
-    borderRadius: 2,
-    backgroundColor: BRANDING.colors.primary,
-    marginTop: 6.5,
-    marginRight: 7,
-  },
-  bulletText: {
-    fontSize: 12,
-    color: BRANDING.colors.text,
-    lineHeight: 17,
-    flex: 1,
-  },
-  referencesContainer: {
-    marginTop: 16,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: BRANDING.colors.border,
-  },
-  referencesLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: BRANDING.colors.subtext,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  referenceText: {
-    fontSize: 11,
-    color: BRANDING.colors.subtext,
-    lineHeight: 16,
-    marginBottom: 3,
-  },
-
-  // Existing card styles
-  card: {
-    backgroundColor: BRANDING.colors.surface,
-    marginHorizontal: 16,
-    marginBottom: 10,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BRANDING.colors.border,
-  },
-  cardHeader: { flexDirection: "row", alignItems: "center" },
-  orgName: {
-    fontSize: 14,
-    fontWeight: "700",
-    fontStyle: "italic",
-    color: BRANDING.colors.text,
-  },
-  orgGram: { fontSize: 11.5, color: BRANDING.colors.subtext, marginTop: 2 },
-  badge: {
-    backgroundColor: "#FFF1F2",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  badgeText: {
-    color: BRANDING.colors.reserve,
-    fontWeight: "800",
-    fontSize: 10.5,
-  },
-  importance: {
-    fontSize: 12,
-    color: BRANDING.colors.subtext,
-    marginTop: 10,
-    lineHeight: 17,
-  },
-});

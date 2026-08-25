@@ -13,31 +13,22 @@ import {
 } from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
+import { Paths } from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Swipeable } from "react-native-gesture-handler";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, getStoredToken } from "../services/api";
-import { BRANDING } from "../constants/branding";
+import { Palette } from "../constants/branding";
+import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:8002/api/v1";
 const WS_BASE = API_BASE.replace("http", "ws") + "/chat/ws";
 const LANGUAGES = ["English", "Swahili", "Luganda", "French", "Arabic"];
-const EMOJIS = ["😀", "😂", "🙏", "", "❤️", "🎉", "", "😢", "", "", "🩺", "💊", "🧪", "✅", "⚠️", "🔥"];
 const QUICK_REACTIONS = ["👍", "✅", "🙏", "❤️", "⚠️", "🔥"];
-
-const CLINICAL = {
-  primary: BRANDING.colors.primary,
-  accent: BRANDING.colors.access,
-  danger: BRANDING.colors.reserve,
-  bg: BRANDING.colors.background,
-  surface: BRANDING.colors.surface,
-  border: BRANDING.colors.border,
-  text: BRANDING.colors.text,
-  subtext: BRANDING.colors.subtext,
-};
 
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -57,8 +48,8 @@ const initials = (name: string) =>
 
 function previewFor(m: any) {
   if (!m) return "";
-  if (m.audio_data) return "🎤 Voice message";
-  if (m.file_data) return `📄 ${m.file_name || "document.pdf"}`;
+  if (m.audio_data) return "Voice message";
+  if (m.file_data) return m.file_name || "document.pdf";
   return m.message || "";
 }
 
@@ -74,7 +65,7 @@ function groupReactions(reactions: any[] | undefined, myId: any) {
   return Object.values(map);
 }
 
-function Avatar({ name, online, mine, size = 36 }: { name: string; online?: boolean; mine?: boolean; size?: number }) {
+function Avatar({ name, online, mine, size = 36, styles }: { name: string; online?: boolean; mine?: boolean; size?: number; styles: any }) {
   return (
     <View>
       <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }, mine && styles.avatarMine]}>
@@ -88,6 +79,9 @@ function Avatar({ name, online, mine, size = 36 }: { name: string; online?: bool
 export default function ChatScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [messages, setMessages] = useState<any[]>([]);
   const [online, setOnline] = useState<any[]>([]);
@@ -99,7 +93,6 @@ export default function ChatScreen() {
   const [playingId, setPlayingId] = useState<number | null>(null);
   const [language, setLanguage] = useState("English");
   const [translations, setTranslations] = useState<Record<string, string>>({});
-  const [showEmoji, setShowEmoji] = useState(false);
   const [lastIncoming, setLastIncoming] = useState<string | null>(null);
 
   const [contextMenu, setContextMenu] = useState<{ visible: boolean; message: any | null }>({
@@ -324,7 +317,6 @@ export default function ChatScreen() {
     wsRef.current.send(JSON.stringify({ type: "send", message: text, reply_to_id: replyTo?.id || null }));
     setInput("");
     setReplyTo(null);
-    setShowEmoji(false);
   };
 
   const startRecording = async () => {
@@ -351,18 +343,18 @@ export default function ChatScreen() {
       if (!uri) return;
 
       await setAudioModeAsync({ allowsRecording: false });
-      
+
       // More reliable native file reading
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      
+
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ 
-          type: "send", 
-          message: "", 
-          audio: base64, 
-          reply_to_id: replyTo?.id || null 
+        wsRef.current.send(JSON.stringify({
+          type: "send",
+          message: "",
+          audio: base64,
+          reply_to_id: replyTo?.id || null,
         }));
       }
       setReplyTo(null);
@@ -387,11 +379,11 @@ export default function ChatScreen() {
         playerRef.current.remove();
         playerRef.current = null;
       }
-      
+
       const player = createAudioPlayer({ uri: message.audio_data });
       playerRef.current = player;
       setPlayingId(message.id);
-      
+
       player.addListener('playbackStatusUpdate', (status: any) => {
         if (status.didJustFinish) {
           setPlayingId(null);
@@ -399,7 +391,7 @@ export default function ChatScreen() {
           playerRef.current = null;
         }
       });
-      
+
       player.play();
     } catch {
       Alert.alert("Error", "Failed to play audio.");
@@ -415,12 +407,12 @@ export default function ChatScreen() {
         Alert.alert("File too large", "Please share PDFs under 2 MB.");
         return;
       }
-      
+
       // Direct base64 string conversion via FileSystem (more stable than FileReader on native)
       const base64 = await FileSystem.readAsStringAsync(asset.uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      
+
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: "send",
@@ -445,7 +437,7 @@ export default function ChatScreen() {
         const blob = new Blob([new Uint8Array(byteNumbers)], { type: "application/pdf" });
         window.open(URL.createObjectURL(blob), "_blank");
       } else {
-        const path = `${FileSystem.cacheDirectory}${m.file_name || "document.pdf"}`;
+        const path = `${Paths.cache.uri}${m.file_name || "document.pdf"}`;
         await FileSystem.writeAsStringAsync(path, m.file_data, { encoding: FileSystem.EncodingType.Base64 });
         await Linking.openURL(path);
       }
@@ -463,7 +455,7 @@ export default function ChatScreen() {
     return (
       <View style={styles.swipeReplyIcon}>
         <Animated.View style={{ opacity, transform: [{ scale }] }}>
-          <Ionicons name="arrow-undo" size={20} color={CLINICAL.primary} />
+          <Ionicons name="arrow-undo" size={20} color={colors.primary} />
         </Animated.View>
       </View>
     );
@@ -482,7 +474,7 @@ export default function ChatScreen() {
 
     const bubble = (
       <View style={[styles.msgRow, mine && styles.msgRowMine]}>
-        {!mine && <Avatar name={m.sender_name} online={senderOnline} />}
+        {!mine && <Avatar name={m.sender_name} online={senderOnline} styles={styles} />}
         <View style={[styles.bubbleWrap, mine && styles.bubbleWrapMine]}>
           <View style={[styles.nameRow, mine && styles.nameRowMine]}>
             <Text style={styles.senderName}>{mine ? "You" : m.sender_name}</Text>
@@ -514,18 +506,18 @@ export default function ChatScreen() {
             {isFile ? (
               <TouchableOpacity style={styles.fileBubble} onPress={() => openPdf(m)}>
                 <View style={styles.fileIconWrap}>
-                  <Ionicons name="document-text" size={22} color={CLINICAL.primary} />
+                  <Ionicons name="document-text" size={22} color={colors.primary} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <Text style={styles.fileName} numberOfLines={1}>{m.file_name || "document.pdf"}</Text>
                   <Text style={styles.fileHint}>PDF document · tap to open</Text>
                 </View>
-                <Ionicons name="download-outline" size={17} color={CLINICAL.subtext} />
+                <Ionicons name="download-outline" size={17} color={colors.subtext} />
               </TouchableOpacity>
             ) : isAudio ? (
               <TouchableOpacity style={styles.audioBubble} onPress={() => playAudio(m)}>
                 <View style={styles.audioPlayWrap}>
-                  <Ionicons name={playingId === m.id ? "pause" : "play"} size={16} color="#fff" />
+                  <Ionicons name={playingId === m.id ? "pause" : "play"} size={16} color={colors.onPrimary} />
                 </View>
                 <View style={styles.audioWave}>
                   {[6, 12, 8, 16, 10, 14, 7].map((h, i) => (
@@ -545,7 +537,7 @@ export default function ChatScreen() {
 
             {mine && (
               <View style={styles.tickRow}>
-                <Ionicons name={read ? "checkmark-done" : "checkmark"} size={13} color={read ? CLINICAL.accent : CLINICAL.subtext} />
+                <Ionicons name={read ? "checkmark-done" : "checkmark"} size={13} color={read ? colors.access : colors.subtext} />
               </View>
             )}
           </TouchableOpacity>
@@ -566,7 +558,7 @@ export default function ChatScreen() {
             </View>
           )}
         </View>
-        {mine && <Avatar name={user?.full_name || "You"} online mine />}
+        {mine && <Avatar name={user?.full_name || "You"} online mine styles={styles} />}
       </View>
     );
 
@@ -606,17 +598,17 @@ export default function ChatScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
-          <Ionicons name="arrow-back" size={20} color="#fff" />
+          <Ionicons name="arrow-back" size={20} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerTitleWrap}>
           <View style={styles.headerTitleRow}>
-            <Ionicons name="medkit" size={15} color="rgba(255,255,255,0.85)" style={{ marginRight: 6 }} />
+            <Ionicons name="medkit" size={15} color={colors.subtext} style={{ marginRight: 6 }} />
             <Text style={styles.title} numberOfLines={1}>Clinical Discussion</Text>
           </View>
           <View style={styles.statusRow}>
-            <View style={[styles.statusDot, { backgroundColor: connected ? "#4ADE80" : "#FBBF24" }]} />
+            <View style={[styles.statusDot, { backgroundColor: connected ? colors.access : colors.watch }]} />
             <Text style={styles.subtitle}>{connected ? "Connected" : "Connecting…"}</Text>
           </View>
         </View>
@@ -666,7 +658,7 @@ export default function ChatScreen() {
         ListHeaderComponent={
           <View style={styles.intro}>
             <View style={styles.introIcon}>
-              <Ionicons name="pulse" size={24} color={CLINICAL.primary} />
+              <Ionicons name="pulse" size={24} color={colors.primary} />
             </View>
             <Text style={styles.introTitle}>Clinical Discussion</Text>
             <Text style={styles.introDesc}>
@@ -694,19 +686,19 @@ export default function ChatScreen() {
             </View>
 
             <TouchableOpacity style={styles.menuItem} onPress={() => menuMsg && handleReply(menuMsg)}>
-              <Ionicons name="arrow-undo-outline" size={20} color={CLINICAL.text} />
+              <Ionicons name="arrow-undo-outline" size={20} color={colors.text} />
               <Text style={styles.menuItemText}>Reply</Text>
             </TouchableOpacity>
             {menuMsg && menuMsg.message ? (
               <TouchableOpacity style={styles.menuItem} onPress={() => handleCopy(menuMsg)}>
-                <Ionicons name="copy-outline" size={20} color={CLINICAL.text} />
+                <Ionicons name="copy-outline" size={20} color={colors.text} />
                 <Text style={styles.menuItemText}>Copy</Text>
               </TouchableOpacity>
             ) : null}
             {menuMine ? (
               <TouchableOpacity style={styles.menuItem} onPress={() => menuMsg && handleDelete(menuMsg)}>
-                <Ionicons name="trash-outline" size={20} color={CLINICAL.danger} />
-                <Text style={[styles.menuItemText, { color: CLINICAL.danger }]}>Delete</Text>
+                <Ionicons name="trash-outline" size={20} color={colors.reserve} />
+                <Text style={[styles.menuItemText, { color: colors.reserve }]}>Delete</Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -721,7 +713,7 @@ export default function ChatScreen() {
               <Text style={styles.replyPreviewText} numberOfLines={1}>{previewFor(replyTo)}</Text>
             </View>
             <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.replyCloseBtn}>
-              <Ionicons name="close" size={18} color={CLINICAL.subtext} />
+              <Ionicons name="close" size={18} color={colors.subtext} />
             </TouchableOpacity>
           </View>
         )}
@@ -732,33 +724,20 @@ export default function ChatScreen() {
             value={input}
             onChangeText={setInput}
             placeholder="Write to Clinical Discussion…"
-            placeholderTextColor={CLINICAL.subtext}
+            placeholderTextColor={colors.subtext}
             multiline
           />
         </View>
 
-        {showEmoji && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.emojiRow}>
-            {EMOJIS.map((e, i) => (
-              <TouchableOpacity key={`emoji-${i}`} onPress={() => setInput((t) => t + e)}>
-                <Text style={styles.emoji}>{e}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
-
         <View style={styles.toolbar}>
-          <TouchableOpacity style={styles.toolBtn} onPress={() => setShowEmoji((v) => !v)}>
-            <Ionicons name="happy-outline" size={18} color={CLINICAL.subtext} />
-          </TouchableOpacity>
           <TouchableOpacity style={styles.toolBtn} onPress={pickPdf}>
-            <Ionicons name="document-attach-outline" size={18} color={CLINICAL.subtext} />
+            <Ionicons name="document-attach-outline" size={18} color={colors.subtext} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.toolBtn, isRecording && styles.toolBtnRec]} onPress={isRecording ? stopRecording : startRecording}>
-            <Ionicons name={isRecording ? "stop" : "mic"} size={18} color={isRecording ? "#fff" : CLINICAL.subtext} />
+            <Ionicons name={isRecording ? "stop" : "mic"} size={18} color={isRecording ? colors.onPrimary : colors.subtext} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]} onPress={send}>
-            <Ionicons name="send" size={16} color="#fff" />
+            <Ionicons name="send" size={16} color={colors.onPrimary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -766,174 +745,166 @@ export default function ChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: CLINICAL.bg },
+function makeStyles(c: Palette) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
 
-  // ---- header ----
-  header: {
-    flexDirection: "row", alignItems: "center", backgroundColor: CLINICAL.primary,
-    paddingHorizontal: 12, paddingTop: 54, paddingBottom: 14,
-    borderBottomLeftRadius: 18, borderBottomRightRadius: 18,
-    boxShadow: '0 3px 8px rgba(0, 0, 0, 0.12)',
-    elevation: 4,
-  },
-  headerBtn: { padding: 6 },
-  headerTitleWrap: { flex: 1, marginLeft: 8 },
-  headerTitleRow: { flexDirection: "row", alignItems: "center" },
-  title: { color: "#fff", fontSize: 16.5, fontWeight: "700", letterSpacing: 0.2 },
-  statusRow: { flexDirection: "row", alignItems: "center", marginTop: 3 },
-  statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 5 },
-  subtitle: { color: "rgba(255,255,255,0.82)", fontSize: 11.5, fontWeight: "500" },
+    // ---- header ----
+    header: {
+      flexDirection: "row", alignItems: "center", backgroundColor: c.surface,
+      paddingHorizontal: 12, paddingBottom: 14,
+      borderBottomWidth: 1, borderBottomColor: c.border,
+    },
+    headerBtn: { padding: 6 },
+    headerTitleWrap: { flex: 1, marginLeft: 8 },
+    headerTitleRow: { flexDirection: "row", alignItems: "center" },
+    title: { color: c.text, fontSize: 16.5, fontWeight: "700", letterSpacing: 0.2 },
+    statusRow: { flexDirection: "row", alignItems: "center", marginTop: 3 },
+    statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 5 },
+    subtitle: { color: c.subtext, fontSize: 11.5, fontWeight: "500" },
 
-  avatarStack: { flexDirection: "row", alignItems: "center", paddingRight: 4 },
-  stackAvatar: {
-    width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.22)",
-    justifyContent: "center", alignItems: "center", borderWidth: 1.5, borderColor: CLINICAL.primary,
-  },
-  stackAvatarMore: { backgroundColor: "rgba(0,0,0,0.25)" },
-  stackAvatarText: { color: "#fff", fontSize: 10, fontWeight: "700" },
+    avatarStack: { flexDirection: "row", alignItems: "center", paddingRight: 4 },
+    stackAvatar: {
+      width: 28, height: 28, borderRadius: 14, backgroundColor: c.surfaceAlt,
+      justifyContent: "center", alignItems: "center", borderWidth: 1.5, borderColor: c.border,
+    },
+    stackAvatarMore: { backgroundColor: c.border },
+    stackAvatarText: { color: c.text, fontSize: 10, fontWeight: "700" },
 
-  // ---- language bar ----
-  langBar: {
-    backgroundColor: CLINICAL.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: CLINICAL.border,
-    boxShadow: '0 2px 3px rgba(0, 0, 0, 0.04)',
-    elevation: 2,
-    zIndex: 5,
-  },
-  langBarContent: { paddingHorizontal: 14, paddingVertical: 10, alignItems: "center", gap: 8 },
-  langChip: {
-    paddingHorizontal: 13, paddingVertical: 7, borderRadius: 18,
-    backgroundColor: CLINICAL.bg, borderWidth: 1, borderColor: CLINICAL.border,
-  },
-  langChipActive: { backgroundColor: CLINICAL.primary, borderColor: CLINICAL.primary },
-  langChipText: { fontSize: 12.5, color: CLINICAL.text, fontWeight: "500" },
-  langChipTextActive: { color: "#fff", fontWeight: "700" },
+    // ---- language bar ----
+    langBar: {
+      backgroundColor: c.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+      zIndex: 5,
+    },
+    langBarContent: { paddingHorizontal: 14, paddingVertical: 10, alignItems: "center", gap: 8 },
+    langChip: {
+      paddingHorizontal: 13, paddingVertical: 7, borderRadius: 18,
+      backgroundColor: c.background, borderWidth: 1, borderColor: c.border,
+    },
+    langChipActive: { backgroundColor: c.primary, borderColor: c.primary },
+    langChipText: { fontSize: 12.5, color: c.text, fontWeight: "500" },
+    langChipTextActive: { color: c.onPrimary, fontWeight: "700" },
 
-  // ---- empty state ----
-  intro: { alignItems: "center", paddingVertical: 22, paddingHorizontal: 20 },
-  introIcon: {
-    width: 52, height: 52, borderRadius: 26, backgroundColor: CLINICAL.primary + "12",
-    justifyContent: "center", alignItems: "center", marginBottom: 12,
-    borderWidth: 1, borderColor: CLINICAL.primary + "22",
-  },
-  introTitle: { fontSize: 18, fontWeight: "800", color: CLINICAL.text },
-  introDesc: { fontSize: 12.5, color: CLINICAL.subtext, textAlign: "center", marginTop: 6, lineHeight: 18, maxWidth: 280 },
+    // ---- empty state ----
+    intro: { alignItems: "center", paddingVertical: 22, paddingHorizontal: 20 },
+    introIcon: {
+      width: 52, height: 52, borderRadius: 26, backgroundColor: c.primarySoft,
+      justifyContent: "center", alignItems: "center", marginBottom: 12,
+      borderWidth: 1, borderColor: c.primary + "22",
+    },
+    introTitle: { fontSize: 18, fontWeight: "800", color: c.text },
+    introDesc: { fontSize: 12.5, color: c.subtext, textAlign: "center", marginTop: 6, lineHeight: 18, maxWidth: 280 },
 
-  // ---- day dividers ----
-  dividerRow: { alignItems: "center", marginVertical: 16 },
-  dividerPill: {
-    backgroundColor: CLINICAL.surface, borderWidth: 1, borderColor: CLINICAL.border,
-    paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12,
-  },
-  dividerLabel: { fontSize: 11.5, fontWeight: "700", color: CLINICAL.subtext },
-  systemText: { textAlign: "center", fontSize: 11.5, color: CLINICAL.subtext, marginVertical: 8, fontStyle: "italic" },
+    // ---- day dividers ----
+    dividerRow: { alignItems: "center", marginVertical: 16 },
+    dividerPill: {
+      backgroundColor: c.surface, borderWidth: 1, borderColor: c.border,
+      paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12,
+    },
+    dividerLabel: { fontSize: 11.5, fontWeight: "700", color: c.subtext },
+    systemText: { textAlign: "center", fontSize: 11.5, color: c.subtext, marginVertical: 8, fontStyle: "italic" },
 
-  // ---- message rows ----
-  msgRow: { flexDirection: "row", marginBottom: 16, alignItems: "flex-start" },
-  msgRowMine: { justifyContent: "flex-end" },
-  avatar: { backgroundColor: CLINICAL.primary, justifyContent: "center", alignItems: "center" },
-  avatarMine: { backgroundColor: CLINICAL.accent },
-  avatarText: { color: "#fff", fontWeight: "800" },
-  onlineDot: { position: "absolute", right: -1, bottom: -1, width: 10, height: 10, borderRadius: 5, backgroundColor: "#4ADE80", borderWidth: 2, borderColor: CLINICAL.bg },
+    // ---- message rows ----
+    msgRow: { flexDirection: "row", marginBottom: 16, alignItems: "flex-start" },
+    msgRowMine: { justifyContent: "flex-end" },
+    avatar: { backgroundColor: c.primary, justifyContent: "center", alignItems: "center" },
+    avatarMine: { backgroundColor: c.access },
+    avatarText: { color: c.onPrimary, fontWeight: "800" },
+    onlineDot: { position: "absolute", right: -1, bottom: -1, width: 10, height: 10, borderRadius: 5, backgroundColor: c.access, borderWidth: 2, borderColor: c.background },
 
-  bubbleWrap: { flex: 1, marginLeft: 10, maxWidth: "82%" },
-  bubbleWrapMine: { marginLeft: 0, marginRight: 10, alignItems: "flex-end" },
-  nameRow: { flexDirection: "row", alignItems: "baseline", marginBottom: 4 },
-  nameRowMine: { justifyContent: "flex-end" },
-  senderName: { fontSize: 12.5, fontWeight: "700", color: CLINICAL.text },
-  msgTime: { fontSize: 10, color: CLINICAL.subtext, marginLeft: 8 },
+    bubbleWrap: { flex: 1, marginLeft: 10, maxWidth: "82%" },
+    bubbleWrapMine: { marginLeft: 0, marginRight: 10, alignItems: "flex-end" },
+    nameRow: { flexDirection: "row", alignItems: "baseline", marginBottom: 4 },
+    nameRowMine: { justifyContent: "flex-end" },
+    senderName: { fontSize: 12.5, fontWeight: "700", color: c.text },
+    msgTime: { fontSize: 10, color: c.subtext, marginLeft: 8 },
 
-  bubble: {
-    padding: 12, borderRadius: 14,
-    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-    elevation: 1,
-  },
-  bubbleMine: { backgroundColor: CLINICAL.accent + "17", borderWidth: 1, borderColor: CLINICAL.accent + "35" },
-  bubbleOther: { backgroundColor: CLINICAL.surface, borderWidth: 1, borderColor: CLINICAL.border },
-  bubbleHighlighted: { backgroundColor: "#FEF3C7", borderColor: "#F5C451" },
-  bubbleText: { fontSize: 14, color: CLINICAL.text, lineHeight: 20 },
-  bubbleTextMine: { color: CLINICAL.text },
-  originalText: { fontSize: 11, color: CLINICAL.subtext, marginTop: 4, fontStyle: "italic" },
-  tickRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 4 },
+    bubble: {
+      padding: 12, borderRadius: 14,
+    },
+    bubbleMine: { backgroundColor: c.access + "17", borderWidth: 1, borderColor: c.access + "35" },
+    bubbleOther: { backgroundColor: c.surface, borderWidth: 1, borderColor: c.border },
+    bubbleHighlighted: { backgroundColor: c.watch + "2E", borderColor: c.watch },
+    bubbleText: { fontSize: 14, color: c.text, lineHeight: 20 },
+    bubbleTextMine: { color: c.text },
+    originalText: { fontSize: 11, color: c.subtext, marginTop: 4, fontStyle: "italic" },
+    tickRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 4 },
 
-  replyQuote: {
-    backgroundColor: CLINICAL.primary + "0F", padding: 8, borderRadius: 8, marginBottom: 8,
-    borderLeftWidth: 3, borderLeftColor: CLINICAL.primary,
-  },
-  replyQuoteName: { fontSize: 10, fontWeight: "700", color: CLINICAL.primary, marginBottom: 2 },
-  replyQuoteText: { fontSize: 11, color: CLINICAL.subtext },
+    replyQuote: {
+      backgroundColor: c.primary + "0F", padding: 8, borderRadius: 8, marginBottom: 8,
+      borderLeftWidth: 3, borderLeftColor: c.primary,
+    },
+    replyQuoteName: { fontSize: 10, fontWeight: "700", color: c.primary, marginBottom: 2 },
+    replyQuoteText: { fontSize: 11, color: c.subtext },
 
-  audioBubble: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 2 },
-  audioPlayWrap: { width: 30, height: 30, borderRadius: 15, backgroundColor: CLINICAL.primary, justifyContent: "center", alignItems: "center" },
-  audioWave: { flexDirection: "row", alignItems: "center", gap: 3, flex: 1 },
-  audioBar: { width: 3, borderRadius: 2, backgroundColor: CLINICAL.primary + "55" },
-  audioLabel: { fontSize: 11.5, color: CLINICAL.subtext, fontWeight: "500" },
+    audioBubble: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 2 },
+    audioPlayWrap: { width: 30, height: 30, borderRadius: 15, backgroundColor: c.primary, justifyContent: "center", alignItems: "center" },
+    audioWave: { flexDirection: "row", alignItems: "center", gap: 3, flex: 1 },
+    audioBar: { width: 3, borderRadius: 2, backgroundColor: c.primary + "55" },
+    audioLabel: { fontSize: 11.5, color: c.subtext, fontWeight: "500" },
 
-  fileBubble: { flexDirection: "row", alignItems: "center" },
-  fileIconWrap: { width: 38, height: 38, borderRadius: 10, backgroundColor: CLINICAL.primary + "12", justifyContent: "center", alignItems: "center" },
-  fileName: { fontSize: 13, fontWeight: "700", color: CLINICAL.text },
-  fileHint: { fontSize: 11, color: CLINICAL.subtext, marginTop: 2 },
+    fileBubble: { flexDirection: "row", alignItems: "center" },
+    fileIconWrap: { width: 38, height: 38, borderRadius: 10, backgroundColor: c.primarySoft, justifyContent: "center", alignItems: "center" },
+    fileName: { fontSize: 13, fontWeight: "700", color: c.text },
+    fileHint: { fontSize: 11, color: c.subtext, marginTop: 2 },
 
-  // ---- reaction pills ----
-  reactionRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 5 },
-  reactionRowMine: { justifyContent: "flex-end" },
-  reactionPill: {
-    flexDirection: "row", alignItems: "center", gap: 3,
-    backgroundColor: CLINICAL.surface, borderWidth: 1, borderColor: CLINICAL.border,
-    borderRadius: 12, paddingHorizontal: 7, paddingVertical: 3,
-  },
-  reactionPillMine: { backgroundColor: CLINICAL.primary + "14", borderColor: CLINICAL.primary + "45" },
-  reactionEmoji: { fontSize: 12.5 },
-  reactionCount: { fontSize: 11, fontWeight: "700", color: CLINICAL.subtext },
-  reactionCountMine: { color: CLINICAL.primary },
+    // ---- reaction pills ----
+    reactionRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 5 },
+    reactionRowMine: { justifyContent: "flex-end" },
+    reactionPill: {
+      flexDirection: "row", alignItems: "center", gap: 3,
+      backgroundColor: c.surface, borderWidth: 1, borderColor: c.border,
+      borderRadius: 12, paddingHorizontal: 7, paddingVertical: 3,
+    },
+    reactionPillMine: { backgroundColor: c.primary + "14", borderColor: c.primary + "45" },
+    reactionEmoji: { fontSize: 12.5 },
+    reactionCount: { fontSize: 11, fontWeight: "700", color: c.subtext },
+    reactionCountMine: { color: c.primary },
 
-  swipeReplyIcon: { width: 56, justifyContent: "center", alignItems: "center" },
+    swipeReplyIcon: { width: 56, justifyContent: "center", alignItems: "center" },
 
-  // ---- context menu ----
-  menuBackdrop: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.4)", justifyContent: "flex-end" },
-  menuSheet: { backgroundColor: CLINICAL.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 10, paddingBottom: 26, alignItems: "stretch" },
-  menuHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: CLINICAL.border, alignSelf: "center", marginBottom: 10 },
-  quickReactRow: {
-    flexDirection: "row", justifyContent: "space-around", alignItems: "center",
-    paddingHorizontal: 16, paddingVertical: 10, marginHorizontal: 16, marginBottom: 6,
-    backgroundColor: CLINICAL.bg, borderRadius: 24, borderWidth: 1, borderColor: CLINICAL.border,
-  },
-  quickReactBtn: { padding: 4 },
-  quickReactEmoji: { fontSize: 24 },
-  menuItem: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 22, paddingVertical: 14 },
-  menuItemText: { fontSize: 15, color: CLINICAL.text, fontWeight: "600" },
+    // ---- context menu ----
+    menuBackdrop: { flex: 1, backgroundColor: "rgba(2, 6, 23, 0.5)", justifyContent: "flex-end" },
+    menuSheet: { backgroundColor: c.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 10, paddingBottom: 26, alignItems: "stretch" },
+    menuHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: c.border, alignSelf: "center", marginBottom: 10 },
+    quickReactRow: {
+      flexDirection: "row", justifyContent: "space-around", alignItems: "center",
+      paddingHorizontal: 16, paddingVertical: 10, marginHorizontal: 16, marginBottom: 6,
+      backgroundColor: c.background, borderRadius: 24, borderWidth: 1, borderColor: c.border,
+    },
+    quickReactBtn: { padding: 4 },
+    quickReactEmoji: { fontSize: 24 },
+    menuItem: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 22, paddingVertical: 14 },
+    menuItemText: { fontSize: 15, color: c.text, fontWeight: "600" },
 
-  // ---- composer ----
-  replyPreview: {
-    flexDirection: "row", alignItems: "center", marginBottom: 8, gap: 10,
-    backgroundColor: CLINICAL.primary + "0A", borderRadius: 10, padding: 8,
-  },
-  replyPreviewContent: { flex: 1, borderLeftWidth: 3, borderLeftColor: CLINICAL.primary, paddingLeft: 8 },
-  replyPreviewName: { fontSize: 11.5, fontWeight: "700", color: CLINICAL.primary, marginBottom: 2 },
-  replyPreviewText: { fontSize: 12.5, color: CLINICAL.text },
-  replyCloseBtn: { padding: 4 },
+    // ---- composer ----
+    replyPreview: {
+      flexDirection: "row", alignItems: "center", marginBottom: 8, gap: 10,
+      backgroundColor: c.primary + "0A", borderRadius: 10, padding: 8,
+    },
+    replyPreviewContent: { flex: 1, borderLeftWidth: 3, borderLeftColor: c.primary, paddingLeft: 8 },
+    replyPreviewName: { fontSize: 11.5, fontWeight: "700", color: c.primary, marginBottom: 2 },
+    replyPreviewText: { fontSize: 12.5, color: c.text },
+    replyCloseBtn: { padding: 4 },
 
-  composer: {
-    borderTopWidth: 1, borderTopColor: CLINICAL.border, backgroundColor: CLINICAL.surface,
-    padding: 10, paddingBottom: Platform.OS === "ios" ? 10 : 12,
-  },
-  inputRow: { flexDirection: "row", alignItems: "flex-end" },
-  input: {
-    flex: 1, backgroundColor: CLINICAL.bg, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10,
-    fontSize: 14, color: CLINICAL.text, borderWidth: 1, borderColor: CLINICAL.border, maxHeight: 110,
-  },
-  emojiRow: { maxHeight: 44, marginTop: 8 },
-  emoji: { fontSize: 22, marginHorizontal: 6 },
-  toolbar: { flexDirection: "row", alignItems: "center", marginTop: 8, gap: 8 },
-  toolBtn: { width: 38, height: 38, borderRadius: 10, justifyContent: "center", alignItems: "center", backgroundColor: CLINICAL.bg, borderWidth: 1, borderColor: CLINICAL.border },
-  toolBtnRec: { backgroundColor: CLINICAL.danger, borderColor: CLINICAL.danger },
-  sendBtn: {
-    flex: 1, height: 38, borderRadius: 10, backgroundColor: CLINICAL.primary,
-    flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6,
-    boxShadow: `0 2px 5px ${CLINICAL.primary}40`,
-    elevation: 2,
-  },
-  sendBtnDisabled: { opacity: 0.45 },
-});
+    composer: {
+      borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.surface,
+      padding: 10, paddingBottom: Platform.OS === "ios" ? 10 : 12,
+    },
+    inputRow: { flexDirection: "row", alignItems: "flex-end" },
+    input: {
+      flex: 1, backgroundColor: c.background, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10,
+      fontSize: 14, color: c.text, borderWidth: 1, borderColor: c.border, maxHeight: 110,
+    },
+    toolbar: { flexDirection: "row", alignItems: "center", marginTop: 8, gap: 8 },
+    toolBtn: { width: 38, height: 38, borderRadius: 10, justifyContent: "center", alignItems: "center", backgroundColor: c.background, borderWidth: 1, borderColor: c.border },
+    toolBtnRec: { backgroundColor: c.reserve, borderColor: c.reserve },
+    sendBtn: {
+      flex: 1, height: 38, borderRadius: 10, backgroundColor: c.primary,
+      flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6,
+    },
+    sendBtnDisabled: { opacity: 0.45 },
+  });
+}

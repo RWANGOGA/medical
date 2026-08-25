@@ -1,12 +1,19 @@
+import { useMemo } from "react";
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../services/api";
-import { BRANDING } from "../constants/branding";
+import { Palette } from "../constants/branding";
+import { useTheme } from "../context/ThemeContext";
 
 export default function AuditScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   const { data: logs, isLoading } = useQuery({
     queryKey: ["audit-logs"],
     queryFn: () => api.getAuditLogs(200),
@@ -15,7 +22,7 @@ export default function AuditScreen() {
   const renderItem = ({ item }: { item: any }) => (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Ionicons name="pulse-outline" size={16} color={BRANDING.colors.primary} />
+        <Ionicons name="pulse-outline" size={16} color={colors.primary} />
         <Text style={styles.action}>{item.action}</Text>
         <Text style={styles.user}>by {item.username}</Text>
       </View>
@@ -26,9 +33,9 @@ export default function AuditScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={20} color="#fff" />
+          <Ionicons name="arrow-back" size={20} color={colors.text} />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={styles.title}>Activity Log</Text>
@@ -37,13 +44,13 @@ export default function AuditScreen() {
       </View>
 
       {isLoading ? (
-        <ActivityIndicator size="large" color={BRANDING.colors.primary} style={{ marginTop: 40 }} />
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={logs || []}
           keyExtractor={(l) => String(l.id)}
           renderItem={renderItem}
-          contentContainerStyle={{ padding: 16 }}
+          contentContainerStyle={{ padding: 16, maxWidth: 720, width: "100%", alignSelf: "center" }}
           ListEmptyComponent={
             <Text style={styles.empty}>No activity yet. Add a patient or a lab result and it will appear here.</Text>
           }
@@ -53,17 +60,35 @@ export default function AuditScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BRANDING.colors.background },
-  header: { flexDirection: "row", alignItems: "center", backgroundColor: BRANDING.colors.primary, padding: 16, paddingTop: 60, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
-  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
-  title: { color: "#fff", fontSize: 20, fontWeight: "800" },
-  subtitle: { color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 2 },
-  card: { backgroundColor: BRANDING.colors.surface, borderRadius: 12, borderWidth: 1, borderColor: BRANDING.colors.border, padding: 14, marginBottom: 10 },
-  cardHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
-  action: { fontSize: 14, fontWeight: "700", color: BRANDING.colors.text, flex: 1 },
-  user: { fontSize: 11, color: BRANDING.colors.primary, fontWeight: "700" },
-  details: { fontSize: 12, color: BRANDING.colors.text, marginTop: 6, lineHeight: 17 },
-  time: { fontSize: 10, color: BRANDING.colors.subtext, marginTop: 6 },
-  empty: { fontSize: 13, color: BRANDING.colors.subtext, textAlign: "center", marginTop: 40 },
-});
+function makeStyles(c: Palette) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: c.surface,
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+    },
+    backBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: c.surfaceAlt,
+      borderWidth: 1,
+      borderColor: c.border,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    title: { color: c.text, fontSize: 20, fontWeight: "800" },
+    subtitle: { color: c.subtext, fontSize: 12, marginTop: 2 },
+    card: { backgroundColor: c.surface, borderRadius: 12, borderWidth: 1, borderColor: c.border, padding: 14, marginBottom: 10 },
+    cardHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+    action: { fontSize: 14, fontWeight: "700", color: c.text, flex: 1 },
+    user: { fontSize: 11, color: c.primary, fontWeight: "700" },
+    details: { fontSize: 12, color: c.text, marginTop: 6, lineHeight: 17 },
+    time: { fontSize: 10, color: c.subtext, marginTop: 6 },
+    empty: { fontSize: 13, color: c.subtext, textAlign: "center", marginTop: 40 },
+  });
+}

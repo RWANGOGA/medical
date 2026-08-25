@@ -81,13 +81,13 @@ def expand_guideline(payload: ExpandRequest):
         raise HTTPException(status_code=503, detail="AI service not configured")
 
     client = Groq(api_key=api_key)
-    model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 
     try:
         completion = client.chat.completions.create(
             model=model,
             temperature=0.2,  # Low temp for factual clinical content
-            max_completion_tokens=2000,
+            max_completion_tokens=4000,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": EXPANSION_SYSTEM_PROMPT},

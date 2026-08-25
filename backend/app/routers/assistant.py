@@ -30,7 +30,8 @@ Your role:
 - ALWAYS explain the clinical/scientific REASONING, not just the answer.
 - Reference WHO AWaRe classification where relevant.
 - Flag safety concerns: pregnancy contraindications (e.g., avoid fluoroquinolones), allergy cross-reactivity (e.g., beta-lactams with penicillin allergy), and renal/hepatic dose adjustments.
-- Be concise and structured for a phone screen (short paragraphs, bullet points).
+- Be concise and structured for a phone screen: short paragraphs and simple lines starting with "- ".
+- Output PLAIN TEXT ONLY. Never use Markdown syntax: no asterisks, no bold/italic markers, no heading hashes, no tables, no code blocks. Use plain numbering (1., 2.) for ordered steps.
 - IMPORTANT: This is clinical decision support. Always remind the clinician to verify against local guidelines, the hospital antibiogram, and the full clinical picture. You are not a substitute for professional judgment.
 """
 
@@ -38,20 +39,20 @@ Your role:
 def chat(payload: ChatRequest):
     api_key = os.getenv("GROQ_API_KEY")
 
-    # Graceful demo mode if no key is configured yet
+    # Graceful fallback if no key is configured yet
     if not api_key:
         return ChatResponse(
-            reply="🤖 The AI Assistant is in DEMO MODE. To enable live Groq-powered clinical reasoning, add your GROQ_API_KEY to the environment. In the meantime, explore the organism, antibiotic, and resistance data across the app!"
+            reply="The clinical assistant is currently unavailable. Please explore the organism, antibiotic, and resistance reference data across the app, and try again later."
         )
 
-    model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 
     try:
         client = Groq(api_key=api_key)
         completion = client.chat.completions.create(
             model=model,
             temperature=0.4,
-            max_completion_tokens=1024,
+            max_completion_tokens=2048,
             messages=[{"role": "system", "content": SYSTEM_PROMPT}] + [
                 {"role": m.role, "content": m.content} for m in payload.messages
             ],
