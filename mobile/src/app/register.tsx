@@ -24,6 +24,12 @@ export default function RegisterScreen() {
     specialization: "",
   });
   const [loading, setLoading] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const passwordMismatch =
+    confirmPassword.length > 0 && confirmPassword !== formData.password;
 
   // Clear any stale token when entering register screen
   useEffect(() => {
@@ -33,6 +39,14 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     if (!formData.full_name || !formData.email || !formData.username || !formData.password || !formData.hospital) {
       Alert.alert("Missing Info", "Please fill in all required fields.");
+      return;
+    }
+    if (!confirmPassword) {
+      Alert.alert("Confirm Password", "Please re-enter your password to confirm it.");
+      return;
+    }
+    if (confirmPassword !== formData.password) {
+      Alert.alert("Password Mismatch", "The passwords you entered do not match. Please try again.");
       return;
     }
     setLoading(true);
@@ -95,14 +109,43 @@ export default function RegisterScreen() {
               onChangeText={(text) => setFormData({ ...formData, username: text })}
               autoCapitalize="none"
             />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor={colors.subtext}
-              value={formData.password}
-              onChangeText={(text) => setFormData({ ...formData, password: text })}
-              secureTextEntry
-            />
+            <View style={styles.passwordWrap}>
+              <TextInput
+                style={[styles.input, styles.passwordInput]}
+                placeholder="Password"
+                placeholderTextColor={colors.subtext}
+                value={formData.password}
+                onChangeText={(text) => setFormData({ ...formData, password: text })}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowPassword((v) => !v)}
+                accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+              >
+                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.subtext} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.passwordWrap}>
+              <TextInput
+                style={[styles.input, styles.passwordInput, passwordMismatch && styles.inputError]}
+                placeholder="Confirm Password"
+                placeholderTextColor={colors.subtext}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirm}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowConfirm((v) => !v)}
+                accessibilityLabel={showConfirm ? "Hide password" : "Show password"}
+              >
+                <Ionicons name={showConfirm ? "eye-off-outline" : "eye-outline"} size={20} color={colors.subtext} />
+              </TouchableOpacity>
+            </View>
+            {passwordMismatch && (
+              <Text style={styles.mismatchText}>Passwords do not match.</Text>
+            )}
             <TextInput
               style={styles.input}
               placeholder="Hospital / Facility"
@@ -158,6 +201,14 @@ function makeStyles(c: Palette) {
       fontSize: 16,
       color: c.text,
     },
+    passwordWrap: { position: "relative" },
+    passwordInput: { paddingRight: 48 },
+    inputError: { borderColor: c.reserve },
+    eyeBtn: {
+      position: "absolute", right: 4, top: 0, bottom: 0, width: 44,
+      justifyContent: "center", alignItems: "center",
+    },
+    mismatchText: { color: c.reserve, fontSize: 13, marginTop: -4 },
     button: {
       backgroundColor: c.primary,
       borderRadius: 12,
