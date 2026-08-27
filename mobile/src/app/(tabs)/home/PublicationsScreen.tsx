@@ -9,6 +9,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../services/api";
 import { Palette } from "../../../constants/branding";
 import { useTheme } from "../../../context/ThemeContext";
+import { useResponsive } from "../../../utils/responsive";
+import { PublicationsSidebar } from "./components/PublicationsSidebar";
 
 const CATEGORIES = ["all", "amr", "stewardship", "guidelines", "research", "case_study"];
 const CONTENT_TYPES = ["all", "article", "video", "paper", "url", "podcast"];
@@ -20,6 +22,7 @@ interface PublicationsScreenProps {
 export function PublicationsScreen({ colors }: PublicationsScreenProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { isTabletOrLarger } = useResponsive();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedType, setSelectedType] = useState("all");
@@ -88,157 +91,171 @@ export function PublicationsScreen({ colors }: PublicationsScreenProps) {
   const styles = makeStyles(colors);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 90 }}>
-      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-        <Text style={styles.title}>Medical Publications</Text>
-        <Text style={styles.subtitle}>Latest research and findings</Text>
-      </View>
-
-      <View style={styles.content}>
-        {/* Search */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color={colors.subtext} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search publications..."
-            placeholderTextColor={colors.subtext}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
+    <View style={styles.layout}>
+      <PublicationsSidebar
+        colors={colors}
+        selectedCategory={selectedCategory}
+        selectedType={selectedType}
+        onCategoryChange={setSelectedCategory}
+        onTypeChange={setSelectedType}
+      />
+      <ScrollView style={[styles.container, isTabletOrLarger && styles.containerWithSidebar]} contentContainerStyle={{ paddingBottom: 90 }}>
+        <View style={[styles.header, { paddingTop: insets.top + 16 }, isTabletOrLarger && styles.headerWithSidebar]}>
+          <Text style={styles.title}>Medical Publications</Text>
+          <Text style={styles.subtitle}>Latest research and findings</Text>
         </View>
 
-        {/* Category Filter */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
-          {CATEGORIES.map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={[
-                styles.filterChip,
-                selectedCategory === cat && styles.filterChipActive,
-              ]}
-              onPress={() => setSelectedCategory(cat)}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  selectedCategory === cat && styles.filterChipTextActive,
-                ]}
-              >
-                {cat === "all" ? "All" : cat.replace("_", " ")}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <View style={styles.content}>
+          {/* Search */}
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color={colors.subtext} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search publications..."
+              placeholderTextColor={colors.subtext}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+          </View>
 
-        {/* Content Type Filter */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
-          {CONTENT_TYPES.map((type) => (
-            <TouchableOpacity
-              key={type}
-              style={[
-                styles.filterChip,
-                selectedType === type && styles.filterChipActive,
-              ]}
-              onPress={() => setSelectedType(type)}
-            >
-              <Ionicons
-                name={getContentTypeIcon(type) as any}
-                size={14}
-                color={selectedType === type ? colors.onPrimary : colors.subtext}
-              />
-              <Text
+          {/* Category Filter */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
+            {CATEGORIES.map((cat) => (
+              <TouchableOpacity
+                key={cat}
                 style={[
-                  styles.filterChipText,
-                  selectedType === type && styles.filterChipTextActive,
+                  styles.filterChip,
+                  selectedCategory === cat && styles.filterChipActive,
                 ]}
+                onPress={() => setSelectedCategory(cat)}
               >
-                {type === "all" ? "All Types" : type}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Publications List */}
-        {isLoading ? (
-          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
-        ) : filteredPublications.length > 0 ? (
-          filteredPublications.map((pub: any) => (
-            <TouchableOpacity
-              key={pub.id}
-              style={styles.publicationCard}
-              onPress={() => handleOpenPublication(pub)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.publicationHeader}>
-                <View
+                <Text
                   style={[
-                    styles.typeIcon,
-                    { backgroundColor: getContentTypeColor(pub.content_type) + "20" },
+                    styles.filterChipText,
+                    selectedCategory === cat && styles.filterChipTextActive,
                   ]}
                 >
-                  <Ionicons
-                    name={getContentTypeIcon(pub.content_type) as any}
-                    size={20}
-                    color={getContentTypeColor(pub.content_type)}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.publicationTitle} numberOfLines={2}>
-                    {pub.title}
-                  </Text>
-                  <Text style={styles.publicationMeta}>
-                    {pub.author_name} · {new Date(pub.created_at).toLocaleDateString()}
-                  </Text>
-                </View>
-              </View>
-
-              {pub.description && (
-                <Text style={styles.publicationDescription} numberOfLines={3}>
-                  {pub.description}
+                  {cat === "all" ? "All" : cat.replace("_", " ")}
                 </Text>
-              )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
 
-              <View style={styles.publicationFooter}>
-                <View style={styles.tagsRow}>
-                  {pub.tags?.slice(0, 3).map((tag: string, i: number) => (
-                    <View key={i} style={styles.tag}>
-                      <Text style={styles.tagText}>{tag}</Text>
-                    </View>
-                  ))}
+          {/* Content Type Filter */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
+            {CONTENT_TYPES.map((type) => (
+              <TouchableOpacity
+                key={type}
+                style={[
+                  styles.filterChip,
+                  selectedType === type && styles.filterChipActive,
+                ]}
+                onPress={() => setSelectedType(type)}
+              >
+                <Ionicons
+                  name={getContentTypeIcon(type) as any}
+                  size={14}
+                  color={selectedType === type ? colors.onPrimary : colors.subtext}
+                />
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    selectedType === type && styles.filterChipTextActive,
+                  ]}
+                >
+                  {type === "all" ? "All Types" : type}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Publications List */}
+          {isLoading ? (
+            <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+          ) : filteredPublications.length > 0 ? (
+            filteredPublications.map((pub: any) => (
+              <TouchableOpacity
+                key={pub.id}
+                style={styles.publicationCard}
+                onPress={() => handleOpenPublication(pub)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.publicationHeader}>
+                  <View
+                    style={[
+                      styles.typeIcon,
+                      { backgroundColor: getContentTypeColor(pub.content_type) + "20" },
+                    ]}
+                  >
+                    <Ionicons
+                      name={getContentTypeColor(pub.content_type) as any}
+                      size={20}
+                      color={getContentTypeColor(pub.content_type)}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.publicationTitle} numberOfLines={2}>
+                      {pub.title}
+                    </Text>
+                    <Text style={styles.publicationMeta}>
+                      {pub.author_name} · {new Date(pub.created_at).toLocaleDateString()}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.statsRow}>
-                  <Ionicons name="eye" size={14} color={colors.subtext} />
-                  <Text style={styles.statsText}>{pub.view_count || 0}</Text>
-                  {pub.has_file && (
-                    <>
-                      <Ionicons name="attach" size={14} color={colors.subtext} style={{ marginLeft: 12 }} />
-                      <Text style={styles.statsText}>{pub.file_name}</Text>
-                    </>
-                  )}
+
+                {pub.description && (
+                  <Text style={styles.publicationDescription} numberOfLines={3}>
+                    {pub.description}
+                  </Text>
+                )}
+
+                <View style={styles.publicationFooter}>
+                  <View style={styles.tagsRow}>
+                    {pub.tags?.slice(0, 3).map((tag: string, i: number) => (
+                      <View key={i} style={styles.tag}>
+                        <Text style={styles.tagText}>{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={styles.statsRow}>
+                    <Ionicons name="eye" size={14} color={colors.subtext} />
+                    <Text style={styles.statsText}>{pub.view_count || 0}</Text>
+                    {pub.has_file && (
+                      <>
+                        <Ionicons name="attach" size={14} color={colors.subtext} style={{ marginLeft: 12 }} />
+                        <Text style={styles.statsText}>{pub.file_name}</Text>
+                      </>
+                    )}
+                  </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))
-        ) : (
-          <View style={styles.emptyState}>
-            <Ionicons name="newspaper-outline" size={48} color={colors.subtext} />
-            <Text style={styles.emptyText}>No publications found</Text>
-            <Text style={styles.emptySubtext}>Try adjusting your search or filters</Text>
-          </View>
-        )}
-      </View>
-    </ScrollView>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Ionicons name="newspaper-outline" size={48} color={colors.subtext} />
+              <Text style={styles.emptyText}>No publications found</Text>
+              <Text style={styles.emptySubtext}>Try adjusting your search or filters</Text>
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 function makeStyles(c: Palette) {
   return StyleSheet.create({
+    layout: { flex: 1, flexDirection: "row", backgroundColor: c.background },
     container: { flex: 1, backgroundColor: c.background },
+    containerWithSidebar: { marginLeft: 0 },
     header: {
       backgroundColor: c.primary,
       padding: 20,
       borderBottomLeftRadius: 24,
       borderBottomRightRadius: 24,
+    },
+    headerWithSidebar: {
+      borderBottomLeftRadius: 0,
     },
     title: { fontSize: 24, fontWeight: "800", color: c.onPrimary },
     subtitle: { fontSize: 13, color: c.onPrimary, opacity: 0.8, marginTop: 4 },
