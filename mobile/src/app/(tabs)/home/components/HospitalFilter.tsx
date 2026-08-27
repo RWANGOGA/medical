@@ -21,6 +21,9 @@ interface HospitalFilterProps {
 }
 
 export function HospitalFilter({ value, onChange, colors, isAuthenticated }: HospitalFilterProps) {
+  // Determine which hospitals to show — must be declared before useQuery hooks
+  const [showAll, setShowAll] = useState(!isAuthenticated);
+
   // Fetch hospitals based on auth status
   const { data: allHospitals, isLoading: allLoading } = useQuery({
     queryKey: ["hospitals", "all"],
@@ -33,9 +36,6 @@ export function HospitalFilter({ value, onChange, colors, isAuthenticated }: Hos
     queryFn: () => api.getHospitals(true),
     enabled: !!isAuthenticated,
   });
-
-  // Determine which hospitals to show
-  const [showAll, setShowAll] = useState(!isAuthenticated);
 
   const hospitals = isAuthenticated && !showAll ? doctorHospital : allHospitals;
   const isLoading = isAuthenticated && !showAll ? doctorLoading : allLoading;
