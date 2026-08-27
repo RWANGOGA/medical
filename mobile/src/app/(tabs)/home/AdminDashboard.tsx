@@ -6,10 +6,10 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { api } from "../../services/api";
-import { Palette } from "../../constants/branding";
-import { useTheme } from "../../context/ThemeContext";
-import { useAuth } from "../../context/AuthContext";
+import { api } from "../../../services/api";
+import { Palette } from "../../../constants/branding";
+import { useTheme } from "../../../context/ThemeContext";
+import { useAuth } from "../../../context/AuthContext";
 
 const ALL_HOSPITALS = "All Hospitals";
 
