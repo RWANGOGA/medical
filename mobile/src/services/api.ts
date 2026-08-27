@@ -136,6 +136,44 @@ export const api = {
     request<{ translated: string }>("/translate/", { method: "POST", body: JSON.stringify(payload) }),
 
 
-  getAntibiogramStats: (hospital?: string) =>
-  request<any>(`/dashboard/antibiogram-stats${hospital ? `?hospital=${encodeURIComponent(hospital)}` : ""}`),  
+getAntibiogramStats: (hospital?: string) =>
+  request<any>(`/dashboard/antibiogram-stats${hospital ? `?hospital=${encodeURIComponent(hospital)}` : ""}`),
+
+  // Admin endpoints
+  getAdminDashboard: () => request<any>("/admin/dashboard"),
+  getAdminDoctors: (page = 1, limit = 20) =>
+    request<any>(`/admin/doctors?page=${page}&limit=${limit}`),
+  suspendDoctor: (doctorId: number, reason: string) =>
+    request<any>(`/admin/doctors/${doctorId}/suspend`, {
+      method: "PUT",
+      body: JSON.stringify({ reason }),
+    }),
+  activateDoctor: (doctorId: number) =>
+    request<any>(`/admin/doctors/${doctorId}/activate`, { method: "PUT" }),
+  deleteAdminDoctor: (doctorId: number) =>
+    request<any>(`/admin/doctors/${doctorId}`, { method: "DELETE" }),
+  getAdminPatients: (page = 1, limit = 20) =>
+    request<any>(`/admin/patients?page=${page}&limit=${limit}`),
+  deleteAdminPatient: (patientId: number) =>
+    request<any>(`/admin/patients/${patientId}`, { method: "DELETE" }),
+  changeUserRole: (userId: number, newRole: string) =>
+    request<any>(`/admin/users/${userId}/role`, {
+      method: "PUT",
+      body: JSON.stringify({ new_role: newRole }),
+    }),
+
+  // Publications endpoints
+  getPublications: (page = 1, limit = 20, category?: string) =>
+    request<any>(`/publications/?page=${page}&limit=${limit}${category ? `&category=${category}` : ""}`),
+  getPublication: (id: number) => request<any>(`/publications/${id}`),
+  getAdminPublications: (page = 1, limit = 20) =>
+    request<any>(`/publications/admin/list?page=${page}&limit=${limit}`),
+  createPublication: (payload: any) =>
+    request<any>("/publications/", { method: "POST", body: JSON.stringify(payload) }),
+  updatePublication: (id: number, payload: any) =>
+    request<any>(`/publications/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deletePublication: (id: number) =>
+    request<any>(`/publications/${id}`, { method: "DELETE" }),
+  downloadPublicationFile: (id: number) =>
+    request<any>(`/publications/${id}/download`),
 };

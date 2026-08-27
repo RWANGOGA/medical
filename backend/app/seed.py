@@ -189,6 +189,19 @@ def seed_database(session: Session):
         specialization="Infectious Diseases",
     )
     session.add(demo_doctor)
+
+    # --- ADMIN USER ---
+    admin_user = User(
+        username="admin",
+        email="admin@stewardamr.org",
+        hashed_password=hash_password("admin123"),
+        full_name="System Administrator",
+        role="admin",
+        hospital="All Hospitals",
+        specialization="System Administration",
+        is_active=True,
+    )
+    session.add(admin_user)
     
     # COMMIT HERE - organisms must be in DB before lab results reference them
     session.commit()

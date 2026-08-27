@@ -7,7 +7,7 @@ from app.models import Organism, Antibiotic, Patient, TreatmentProtocol
 from app.seed import seed_database
 from app.models import User, AuditLog
 from app.routers import organisms, antibiotics, patients, cds, dashboard, assistant, auth, search, guidelines, lab, chat, translate
-from app.routers import organisms, antibiotics, patients, cds, dashboard, assistant, auth, search, guidelines, lab, chat, translate, audit, reports
+from app.routers import organisms, antibiotics, patients, cds, dashboard, assistant, auth, search, guidelines, lab, chat, translate, audit, reports, admin, publications
 from app.services import audit as _audit_trails  # noqa: F401  (registers automatic audit logging)
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
@@ -58,6 +58,8 @@ app.include_router(translate.router, prefix="/api/v1")
 app.include_router(lab.router, prefix="/api/v1")
 app.include_router(audit.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")
+app.include_router(publications.router, prefix="/api/v1")
 
 @app.get("/")
 def root():

@@ -113,3 +113,51 @@ class ChatMessage(SQLModel, table=True):
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     file_data: Optional[str] = None   # base64 PDF
     file_name: Optional[str] = None
+    reactions: List[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    is_deleted: bool = False
+    is_edited: bool = False
+    read_by: List[int] = Field(default_factory=list, sa_column=Column(JSON))
+
+
+# --- PUBLICATION MODEL ---
+class Publication(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str = Field(index=True)
+    description: str = ""
+    content_type: str = "article"  # article, video, paper, url, podcast
+    content_url: str = ""
+    file_data: Optional[str] = None  # base64 for uploaded files
+    file_name: Optional[str] = None
+    file_size: Optional[int] = None
+    thumbnail_url: str = ""
+    tags: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    category: str = ""  # amr, stewardship, guidelines, research, case_study
+    author_id: int = Field(foreign_key="user.id")
+    author_name: str = ""
+    is_published: bool = True
+    view_count: int = 0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# --- PUBLICATION VIEW TRACKING ---
+class PublicationView(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    publication_id: int = Field(foreign_key="publication.id")
+    user_id: int = Field(foreign_key="user.id")
+    viewed_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# --- DOCTOR PROFILE EXTENSION ---
+class DoctorProfile(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", unique=True)
+    license_number: str = ""
+    years_experience: int = 0
+    bio: str = ""
+    profile_image: Optional[str] = None
+    is_verified: bool = False
+    is_suspended: bool = False
+    suspension_reason: str = ""
+    last_active: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

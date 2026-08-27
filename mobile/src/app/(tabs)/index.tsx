@@ -3,10 +3,11 @@ import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { DoctorDashboard } from "./home/DoctorDashboard";
+import { AdminDashboard } from "./home/AdminDashboard";
 import { PublicHome } from "./home/PublicHome";
 
 export default function HomeScreen() {
-  const { isAuthenticated, user, isLoading } = useAuth();
+  const { isAuthenticated, isAdmin, user, isLoading } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -20,6 +21,9 @@ export default function HomeScreen() {
   }
 
   if (isAuthenticated && user) {
+    if (isAdmin) {
+      return <AdminDashboard colors={colors} />;
+    }
     return <DoctorDashboard user={user} colors={colors} />;
   }
 
