@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
   KeyboardAvoidingView, Platform, Alert, ScrollView, Linking,
-  Animated, Modal, Pressable,
+  Animated, Modal, Pressable, ActivityIndicator,
 } from "react-native";
 import {
   useAudioRecorder,
@@ -78,7 +78,7 @@ function Avatar({ name, online, mine, size = 36, styles }: { name: string; onlin
 
 export default function ChatScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -114,14 +114,23 @@ export default function ChatScreen() {
   // Initialize Audio Recorder
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
+  // Redirect to login if not authenticated
   useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [authLoading, isAuthenticated]);
+
+  // Only fetch chat history if authenticated
+  useEffect(() => {
+    if (!isAuthenticated) return;
     (async () => {
       try {
         const hist = await api.getChatMessages();
         setMessages(hist);
       } catch {}
     })();
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     let socket: WebSocket | null = null;
@@ -595,6 +604,15 @@ export default function ChatScreen() {
 
   const onlinePreview = online.slice(0, 3);
   const onlineOverflow = online.length - onlinePreview.length;
+
+  // Show loading state while checking auth
+  if (authLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>

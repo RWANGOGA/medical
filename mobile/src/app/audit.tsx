@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -7,17 +7,36 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../services/api";
 import { Palette } from "../constants/branding";
 import { useTheme } from "../context/ThemeContext";
+import { useAuth } from "../context/AuthContext";
 
 export default function AuditScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [authLoading, isAuthenticated]);
 
   const { data: logs, isLoading } = useQuery({
     queryKey: ["audit-logs"],
     queryFn: () => api.getAuditLogs(200),
+    enabled: isAuthenticated,
   });
+
+  // Show loading state while checking auth
+  if (authLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   const renderItem = ({ item }: { item: any }) => (
     <View style={styles.card}>

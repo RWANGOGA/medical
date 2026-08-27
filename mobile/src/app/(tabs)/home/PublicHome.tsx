@@ -74,7 +74,7 @@ export function PublicHome({ colors }: PublicHomeProps) {
       </View>
 
       {/* Hospital Filter */}
-      <HospitalFilter value={hospital} onChange={setHospital} colors={colors} />
+      <HospitalFilter value={hospital} onChange={setHospital} colors={colors} isAuthenticated={false} />
 
       <View style={styles.content}>
         {/* Critical Alert */}

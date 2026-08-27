@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from "react-native";
+import { useEffect, useMemo } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { Palette } from "../../constants/branding";
 import { useTheme, ThemeMode } from "../../context/ThemeContext";
@@ -15,9 +15,16 @@ const MODES: { value: ThemeMode; label: string }[] = [
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { logout, user } = useAuth();
+  const { logout, user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { colors, mode, setMode } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [authLoading, isAuthenticated]);
 
   const handleLogout = async () => {
     // Web note: Alert.alert is shimmed to window.confirm via src/setup/alert-shim.ts
@@ -35,6 +42,15 @@ export default function ProfileScreen() {
   const roleDisplay = user?.role
     ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
     : "Doctor";
+
+  // Show loading state while checking auth
+  if (authLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <Screen scroll contentStyle={{ padding: 20, gap: 16 }}>

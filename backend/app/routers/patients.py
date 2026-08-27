@@ -82,7 +82,8 @@ def list_patients(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    return session.exec(select(Patient)).all()
+    """List all patients, most recently added first."""
+    return session.exec(select(Patient).order_by(Patient.id.desc())).all()
 
 
 @router.get("/{patient_id}", response_model=Patient)

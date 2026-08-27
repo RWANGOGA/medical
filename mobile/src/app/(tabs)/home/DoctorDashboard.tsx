@@ -8,8 +8,21 @@ import { api } from "../../../services/api";
 import { Palette } from "../../../constants/branding";
 import { useAssistant } from "../../../context/AssistantContext";
 import { HospitalFilter } from "./components/HospitalFilter";
+import { useResponsive } from "../../../utils/responsive";
 
 const ALL_HOSPITALS = "All Hospitals";
+
+interface LabResult {
+  id: number;
+  patient_name: string;
+  organism_id: string;
+  specimen: string;
+  hospital: string;
+  collection_date: string;
+  susceptibility: Record<string, string>;
+  entered_by: string;
+  created_at: string;
+}
 
 interface DoctorDashboardProps {
   user: {
@@ -35,6 +48,7 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { openAssistant } = useAssistant();
+  const { isTabletOrLarger, isDesktopOrLarger } = useResponsive();
   const [hospital, setHospital] = useState(ALL_HOSPITALS);
   const activeHospital = hospital === ALL_HOSPITALS ? undefined : hospital;
 
@@ -46,6 +60,11 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
   const { data: alerts, isLoading: alertsLoading } = useQuery({
     queryKey: ["alerts", hospital],
     queryFn: () => api.getDashboardAlerts(activeHospital),
+  });
+
+  const { data: recentLabResults, isLoading: labResultsLoading } = useQuery({
+    queryKey: ["recent-lab-results", hospital],
+    queryFn: () => api.getRecentLabResults(10),
   });
 
   const filteredPatients = useMemo(() => {
@@ -60,6 +79,13 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
   }, [alerts]);
 
   const recentPatients = filteredPatients.slice(0, 3);
+
+  const filteredLabResults = useMemo(() => {
+    if (!recentLabResults) return [];
+    return recentLabResults.filter(
+      (r: LabResult) => !activeHospital || r.hospital === activeHospital
+    );
+  }, [recentLabResults, activeHospital]);
 
   const quickActions: QuickAction[] = [
     {
@@ -170,7 +196,7 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
       </View>
 
       {/* Hospital Filter */}
-      <HospitalFilter value={hospital} onChange={setHospital} colors={colors} />
+      <HospitalFilter value={hospital} onChange={setHospital} colors={colors} isAuthenticated={true} />
 
       <View style={styles.content}>
         {/* Critical Alerts */}
@@ -196,10 +222,10 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
           </View>
         ) : null}
 
-        {/* Stats Row */}
-        <View style={styles.statsRow}>
+        {/* Stats Row - responsive: 2 cols on phone, 4 on tablet+ */}
+        <View style={[styles.statsRow, isTabletOrLarger && styles.statsRowTablet]}>
           <TouchableOpacity
-            style={styles.statCard}
+            style={[styles.statCard, isTabletOrLarger && styles.statCardTablet]}
             onPress={() => router.push("/(tabs)/patients")}
             accessibilityRole="button"
             accessibilityLabel={`${patientCount} patients. Tap to view.`}
@@ -214,7 +240,7 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.statCard}
+            style={[styles.statCard, isTabletOrLarger && styles.statCardTablet]}
             onPress={() => router.push("/(tabs)/search")}
             accessibilityRole="button"
             accessibilityLabel="Search clinical data"
@@ -223,6 +249,31 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
             <Text style={styles.statValue}>Search</Text>
             <Text style={styles.statLabel}>Clinical Data</Text>
           </TouchableOpacity>
+
+          {isTabletOrLarger && (
+            <>
+              <TouchableOpacity
+                style={[styles.statCard, styles.statCardTablet]}
+                onPress={() => router.push("/add-lab-result")}
+                accessibilityRole="button"
+                accessibilityLabel="Enter lab result"
+              >
+                <Ionicons name="flask" size={28} color={colors.access} />
+                <Text style={styles.statValue}>Lab</Text>
+                <Text style={styles.statLabel}>Add Result</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.statCard, styles.statCardTablet]}
+                onPress={openAssistant}
+                accessibilityRole="button"
+                accessibilityLabel="Clinical assistant"
+              >
+                <Ionicons name="pulse-outline" size={28} color={colors.reserve} />
+                <Text style={styles.statValue}>AI</Text>
+                <Text style={styles.statLabel}>Assistant</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {/* Primary Quick Actions */}
@@ -232,7 +283,7 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
             {primaryActions.map((action) => (
               <TouchableOpacity
                 key={action.id}
-                style={styles.primaryActionCard}
+                style={[styles.primaryActionCard, isTabletOrLarger && styles.primaryActionCardTablet]}
                 onPress={() => handleActionPress(action)}
                 accessibilityRole="button"
                 accessibilityLabel={action.title}
@@ -317,6 +368,63 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
             <Text style={styles.emptyText}>No patients yet. Use "Register Patient" to create one.</Text>
           )}
         </View>
+
+        {/* Recent Lab Results */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Lab Results</Text>
+            {filteredLabResults.length > 5 && (
+              <TouchableOpacity onPress={() => router.push("/(tabs)/search")}>
+                <Text style={styles.viewAllLink}>View all →</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {labResultsLoading ? (
+            <View style={styles.loadingSection}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.loadingText}>Loading lab results…</Text>
+            </View>
+          ) : filteredLabResults.length > 0 ? (
+            filteredLabResults.slice(0, 5).map((result: LabResult) => (
+              <View key={result.id} style={styles.labResultCard}>
+                <View style={styles.labResultHeader}>
+                  <View style={styles.labResultIcon}>
+                    <Ionicons name="flask" size={16} color={colors.watch} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.labResultPatient}>{result.patient_name || "Unknown Patient"}</Text>
+                    <Text style={styles.labResultMeta}>
+                      {result.organism_id} · {result.specimen} · {result.collection_date}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.susceptibilityRow}>
+                  {Object.entries(result.susceptibility).map(([drug, value]) => (
+                    <View
+                      key={drug}
+                      style={[
+                        styles.susceptibilityBadge,
+                        { backgroundColor: value === "S" ? colors.access + "20" : value === "I" ? colors.watch + "20" : colors.reserve + "20" },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.susceptibilityText,
+                          { color: value === "S" ? colors.access : value === "I" ? colors.watch : colors.reserve },
+                        ]}
+                      >
+                        {drug}: {value}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.emptyText}>No lab results yet. Use "Enter Lab Result" to add one.</Text>
+          )}
+        </View>
       </View>
     </ScrollView>
   );
@@ -388,6 +496,9 @@ function makeStyles(c: Palette) {
     alertText: { fontSize: 12, color: c.text, lineHeight: 17 },
 
     statsRow: { flexDirection: "row", gap: 12, marginBottom: 20, flexWrap: "wrap" },
+    statsRowTablet: {
+      flexWrap: "nowrap",
+    },
     statCard: {
       flex: 1,
       minWidth: 140,
@@ -397,6 +508,12 @@ function makeStyles(c: Palette) {
       alignItems: "center",
       borderWidth: 1,
       borderColor: c.border,
+      minHeight: 100,
+      justifyContent: "center",
+    },
+    statCardTablet: {
+      minWidth: 120,
+      paddingVertical: 20,
     },
     statValue: { fontSize: 20, fontWeight: "800", color: c.text, marginTop: 8 },
     statLabel: { fontSize: 11, color: c.subtext, marginTop: 4, textAlign: "center" },
@@ -412,12 +529,16 @@ function makeStyles(c: Palette) {
       padding: 14,
       borderRadius: 12,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: c.border",
+      minHeight: 120,
+    },
+    primaryActionCardTablet: {
+      width: "31%",
     },
     primaryActionIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+      width: 48,
+      height: 48,
+      borderRadius: 24,
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 10,
@@ -460,5 +581,42 @@ function makeStyles(c: Palette) {
     patientMeta: { fontSize: 12, color: c.subtext, marginTop: 4 },
     cultureText: { fontSize: 11, color: c.subtext, marginTop: 8, fontStyle: "italic" },
     emptyText: { fontSize: 13, color: c.subtext, textAlign: "center", marginTop: 20 },
+
+    // Lab results
+    labResultCard: {
+      backgroundColor: c.surface,
+      padding: 12,
+      borderRadius: 10,
+      marginBottom: 8,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    labResultHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    labResultIcon: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: c.watch + "20",
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 10,
+    },
+    labResultPatient: { fontSize: 14, fontWeight: "700", color: c.text },
+    labResultMeta: { fontSize: 11, color: c.subtext, marginTop: 2 },
+    susceptibilityRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+    },
+    susceptibilityBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+    },
+    susceptibilityText: { fontSize: 10, fontWeight: "700" },
   });
 }

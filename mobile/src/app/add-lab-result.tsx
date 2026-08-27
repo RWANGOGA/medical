@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, Alert, ActivityIndicator,
@@ -16,12 +16,24 @@ const SIR = ["S", "I", "R"];
 
 export default function AddLabResultScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const queryClient = useQueryClient();
-  const { data: organisms } = useQuery({ queryKey: ["organisms"], queryFn: api.getOrganismsPublic });
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [authLoading, isAuthenticated]);
+
+  const { data: organisms } = useQuery({
+    queryKey: ["organisms"],
+    queryFn: api.getOrganismsPublic,
+    enabled: isAuthenticated,
+  });
 
   const [organismId, setOrganismId] = useState("ecoli");
   const [specimen, setSpecimen] = useState("Urine");
@@ -56,8 +68,12 @@ export default function AddLabResultScreen() {
         susceptibility,
       });
       // Refresh the antibiogram so the dashboard updates immediately
+      // Also invalidate patients and lab results so recent patients updates
       queryClient.invalidateQueries({ queryKey: ["antibiogram"] });
       queryClient.invalidateQueries({ queryKey: ["labresults"] });
+      queryClient.invalidateQueries({ queryKey: ["lab-results"] });
+      queryClient.invalidateQueries({ queryKey: ["patients"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-lab-results"] });
       Alert.alert("Result Saved", "The antibiogram has been updated.", [
         { text: "OK", onPress: () => router.back() },
       ]);
@@ -67,6 +83,15 @@ export default function AddLabResultScreen() {
       setLoading(false);
     }
   };
+
+  // Show loading state while checking auth
+  if (authLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 40, paddingTop: insets.top + 16 }}>
@@ -167,18 +192,54 @@ function makeStyles(c: Palette) {
     section: { marginBottom: 20 },
     sectionTitle: { fontSize: 13, fontWeight: "700", color: c.text, marginBottom: 10 },
     chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-    chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border },
+    chip: {
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderRadius: 18,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      minHeight: 44,
+      justifyContent: "center",
+    },
     chipActive: { backgroundColor: c.primary, borderColor: c.primary },
-    chipText: { fontSize: 12, color: c.text },
+    chipText: { fontSize: 14, color: c.text },
     chipTextActive: { color: c.onPrimary, fontWeight: "700" },
-    input: { backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: c.text },
-    sirRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+    input: {
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      fontSize: 16,
+      color: c.text,
+      minHeight: 48,
+    },
+    sirRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
     sirDrug: { fontSize: 14, fontWeight: "600", color: c.text, flex: 1 },
     sirButtons: { flexDirection: "row", gap: 8 },
-    sirBtn: { width: 40, height: 36, borderRadius: 8, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, justifyContent: "center", alignItems: "center" },
-    sirBtnText: { fontSize: 14, fontWeight: "700", color: c.subtext },
-    hint: { fontSize: 11, color: c.subtext, marginTop: 4, fontStyle: "italic" },
-    submitBtn: { backgroundColor: c.primary, paddingVertical: 16, borderRadius: 12, alignItems: "center", marginTop: 10 },
+    sirBtn: {
+      width: 48,
+      height: 48,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    sirBtnText: { fontSize: 16, fontWeight: "700", color: c.subtext },
+    hint: { fontSize: 12, color: c.subtext, marginTop: 4, fontStyle: "italic" },
+    submitBtn: {
+      backgroundColor: c.primary,
+      paddingVertical: 18,
+      borderRadius: 12,
+      alignItems: "center",
+      marginTop: 10,
+      minHeight: 56,
+      justifyContent: "center",
+    },
     submitBtnDisabled: { opacity: 0.6 },
     submitBtnText: { color: c.onPrimary, fontSize: 16, fontWeight: "700" },
   });

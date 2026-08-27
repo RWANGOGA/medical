@@ -1,5 +1,5 @@
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -10,17 +10,28 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router"; // Read pre-filled patient data
 import { api } from "../../services/api";
 import { Palette } from "../../constants/branding";
 import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
 
 export default function CDSScreen() {
+  const router = useRouter();
   const { colors } = useTheme();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [authLoading, isAuthenticated]);
 
   // 1. Read pre-filled patient data from the Patient Chart
   const { prefill_organism, prefill_allergy, prefill_pregnant, prefill_renal } = useLocalSearchParams();
@@ -29,6 +40,7 @@ export default function CDSScreen() {
   const { data: organisms, isLoading: loadingOrgs } = useQuery({
     queryKey: ["organisms"],
     queryFn: api.getOrganisms,
+    enabled: isAuthenticated,
   });
 
   // 3. State for Patient Factors (Initialized with Patient Chart data)
@@ -63,6 +75,15 @@ export default function CDSScreen() {
   };
 
   const result = mutation.data;
+
+  // Show loading state while checking auth
+  if (authLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>

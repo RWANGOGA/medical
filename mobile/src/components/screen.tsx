@@ -10,9 +10,13 @@ import {
 } from "react-native";
 import { SafeAreaView, Edge } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
+import { useResponsive } from "../utils/responsive";
 
 /** Content column width cap so layouts stay readable on tablets and web. */
 export const CONTENT_MAX_WIDTH = 720;
+
+/** Wider content column for desktop */
+export const CONTENT_MAX_WIDTH_WIDE = 1100;
 
 interface ScreenProps {
   children: ReactNode;
@@ -28,6 +32,8 @@ interface ScreenProps {
   edges?: Edge[];
   /** ScrollView keyboard behavior */
   keyboardShouldPersistTaps?: "always" | "never" | "handled";
+  /** Use wider content column on desktop */
+  wide?: boolean;
 }
 
 /**
@@ -42,11 +48,15 @@ export function Screen({
   contentStyle,
   edges = ["top", "bottom", "left", "right"],
   keyboardShouldPersistTaps = "handled",
+  wide = false,
 }: ScreenProps) {
   const { colors } = useTheme();
+  const { isDesktopOrLarger } = useResponsive();
+
+  const maxWidth = wide && isDesktopOrLarger ? CONTENT_MAX_WIDTH_WIDE : CONTENT_MAX_WIDTH;
 
   const column = (
-    <View style={[styles.column, contentStyle]}>{children}</View>
+    <View style={[styles.column, { maxWidth }, contentStyle]}>{children}</View>
   );
 
   let body: ReactNode;
@@ -92,7 +102,6 @@ const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1 },
   column: {
     width: "100%",
-    maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: "center",
     flex: 1,
   },

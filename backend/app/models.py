@@ -62,6 +62,8 @@ class Patient(SQLModel, table=True):
     infection_site: str = ""
     culture_results: str = ""
     antibiotic_timeline: List[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    entered_by: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 # --- USER MODEL (AUTH) ---
 class User(SQLModel, table=True):
@@ -90,6 +92,7 @@ class AuditLog(SQLModel, table=True):
 class LabResult(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     patient_name: str = ""
+    patient_id: Optional[int] = Field(default=None, foreign_key="patient.id", index=True)
     organism_id: str = Field(foreign_key="organism.id", index=True)
     specimen: str = ""
     hospital: str = ""
