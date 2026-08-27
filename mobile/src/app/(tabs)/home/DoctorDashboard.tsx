@@ -4,9 +4,9 @@ import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StyleSheet
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { api } from "../../../../services/api";
-import { Palette } from "../../../../constants/branding";
-import { useAssistant } from "../../../../context/AssistantContext";
+import { api } from "../../../services/api";
+import { Palette } from "../../../constants/branding";
+import { useAssistant } from "../../../context/AssistantContext";
 import { HospitalFilter } from "./components/HospitalFilter";
 
 const ALL_HOSPITALS = "All Hospitals";
