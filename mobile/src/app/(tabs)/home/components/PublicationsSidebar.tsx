@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Palette } from "../../../constants/branding";
-import { useResponsive } from "../../../utils/responsive";
+import { useResponsive } from "../../../../utils/responsive";
 import { useState } from "react";
 
 const CATEGORIES = [
