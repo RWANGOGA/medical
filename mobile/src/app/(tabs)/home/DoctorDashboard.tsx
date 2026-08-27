@@ -8,6 +8,7 @@ import { api } from "../../../services/api";
 import { Palette } from "../../../constants/branding";
 import { useAssistant } from "../../../context/AssistantContext";
 import { HospitalFilter } from "./components/HospitalFilter";
+import { useResponsive } from "../../../utils/responsive";
 
 const ALL_HOSPITALS = "All Hospitals";
 
@@ -47,6 +48,7 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { openAssistant } = useAssistant();
+  const { isTabletOrLarger, isDesktopOrLarger } = useResponsive();
   const [hospital, setHospital] = useState(ALL_HOSPITALS);
   const activeHospital = hospital === ALL_HOSPITALS ? undefined : hospital;
 
@@ -220,10 +222,10 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
           </View>
         ) : null}
 
-        {/* Stats Row */}
-        <View style={styles.statsRow}>
+        {/* Stats Row - responsive: 2 cols on phone, 4 on tablet+ */}
+        <View style={[styles.statsRow, isTabletOrLarger && styles.statsRowTablet]}>
           <TouchableOpacity
-            style={styles.statCard}
+            style={[styles.statCard, isTabletOrLarger && styles.statCardTablet]}
             onPress={() => router.push("/(tabs)/patients")}
             accessibilityRole="button"
             accessibilityLabel={`${patientCount} patients. Tap to view.`}
@@ -238,7 +240,7 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.statCard}
+            style={[styles.statCard, isTabletOrLarger && styles.statCardTablet]}
             onPress={() => router.push("/(tabs)/search")}
             accessibilityRole="button"
             accessibilityLabel="Search clinical data"
@@ -247,6 +249,31 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
             <Text style={styles.statValue}>Search</Text>
             <Text style={styles.statLabel}>Clinical Data</Text>
           </TouchableOpacity>
+
+          {isTabletOrLarger && (
+            <>
+              <TouchableOpacity
+                style={[styles.statCard, styles.statCardTablet]}
+                onPress={() => router.push("/add-lab-result")}
+                accessibilityRole="button"
+                accessibilityLabel="Enter lab result"
+              >
+                <Ionicons name="flask" size={28} color={colors.access} />
+                <Text style={styles.statValue}>Lab</Text>
+                <Text style={styles.statLabel}>Add Result</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.statCard, styles.statCardTablet]}
+                onPress={openAssistant}
+                accessibilityRole="button"
+                accessibilityLabel="Clinical assistant"
+              >
+                <Ionicons name="pulse-outline" size={28} color={colors.reserve} />
+                <Text style={styles.statValue}>AI</Text>
+                <Text style={styles.statLabel}>Assistant</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {/* Primary Quick Actions */}
@@ -256,7 +283,7 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
             {primaryActions.map((action) => (
               <TouchableOpacity
                 key={action.id}
-                style={styles.primaryActionCard}
+                style={[styles.primaryActionCard, isTabletOrLarger && styles.primaryActionCardTablet]}
                 onPress={() => handleActionPress(action)}
                 accessibilityRole="button"
                 accessibilityLabel={action.title}
@@ -469,6 +496,9 @@ function makeStyles(c: Palette) {
     alertText: { fontSize: 12, color: c.text, lineHeight: 17 },
 
     statsRow: { flexDirection: "row", gap: 12, marginBottom: 20, flexWrap: "wrap" },
+    statsRowTablet: {
+      flexWrap: "nowrap",
+    },
     statCard: {
       flex: 1,
       minWidth: 140,
@@ -478,6 +508,12 @@ function makeStyles(c: Palette) {
       alignItems: "center",
       borderWidth: 1,
       borderColor: c.border,
+      minHeight: 100,
+      justifyContent: "center",
+    },
+    statCardTablet: {
+      minWidth: 120,
+      paddingVertical: 20,
     },
     statValue: { fontSize: 20, fontWeight: "800", color: c.text, marginTop: 8 },
     statLabel: { fontSize: 11, color: c.subtext, marginTop: 4, textAlign: "center" },
@@ -493,12 +529,16 @@ function makeStyles(c: Palette) {
       padding: 14,
       borderRadius: 12,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: c.border",
+      minHeight: 120,
+    },
+    primaryActionCardTablet: {
+      width: "31%",
     },
     primaryActionIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+      width: 48,
+      height: 48,
+      borderRadius: 24,
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 10,
