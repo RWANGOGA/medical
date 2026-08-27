@@ -165,6 +165,24 @@ export function PublicHome({ colors }: PublicHomeProps) {
           </TouchableOpacity>
         </View>
 
+        {/* Publications CTA */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Medical Publications</Text>
+          <TouchableOpacity
+            style={styles.ctaCard}
+            onPress={() => router.push("/(tabs)/publications")}
+            accessibilityRole="button"
+            accessibilityLabel="View medical publications"
+          >
+            <Ionicons name="newspaper-outline" size={20} color={colors.primary} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={styles.ctaTitle}>Latest research & findings</Text>
+              <Text style={styles.ctaSub}>Articles, videos, papers on AMR and stewardship</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.subtext} />
+          </TouchableOpacity>
+        </View>
+
         {/* Doctor Login CTA */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>For healthcare professionals</Text>
