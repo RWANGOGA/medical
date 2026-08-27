@@ -529,7 +529,7 @@ function makeStyles(c: Palette) {
       padding: 14,
       borderRadius: 12,
       borderWidth: 1,
-      borderColor: c.border",
+      borderColor: c.border,
       minHeight: 120,
     },
     primaryActionCardTablet: {
