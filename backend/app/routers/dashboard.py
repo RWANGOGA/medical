@@ -7,7 +7,8 @@ from collections import defaultdict
 import re
 
 from app.db import get_session
-from app.models import Antibiotic, Patient, Organism, LabResult
+from app.models import Antibiotic, Patient, Organism, LabResult, User
+from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/dashboard", tags=["Surveillance Dashboard"])
 
@@ -31,8 +32,20 @@ class AwReSummary(BaseModel):
 
 
 @router.get("/hospitals", response_model=list[str])
-def get_hospitals(session: Session = Depends(get_session)):
-    """Distinct hospitals for the multi-hospital filter."""
+def get_hospitals(
+    filter_by_doctor: bool = Query(False, description="Filter hospitals to only the current user's hospital"),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Distinct hospitals for the multi-hospital filter.
+
+    If filter_by_doctor=true, returns only the current user's hospital.
+    Otherwise returns all hospitals in the system.
+    """
+    # If filtering by doctor, return only their hospital
+    if filter_by_doctor and current_user.hospital:
+        return [current_user.hospital]
+
     hospitals = set()
     for p in session.exec(select(Patient)).all():
         if p.hospital:
@@ -41,6 +54,15 @@ def get_hospitals(session: Session = Depends(get_session)):
         if lr.hospital:
             hospitals.add(lr.hospital)
     return sorted(hospitals)
+
+
+@router.get("/doctor-hospital", response_model=dict)
+def get_doctor_hospital(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Get the current doctor's hospital."""
+    return {"hospital": current_user.hospital or ""}
 
 
 @router.get("/aware", response_model=list[AwReSummary])

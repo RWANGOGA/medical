@@ -11,6 +11,18 @@ import { HospitalFilter } from "./components/HospitalFilter";
 
 const ALL_HOSPITALS = "All Hospitals";
 
+interface LabResult {
+  id: number;
+  patient_name: string;
+  organism_id: string;
+  specimen: string;
+  hospital: string;
+  collection_date: string;
+  susceptibility: Record<string, string>;
+  entered_by: string;
+  created_at: string;
+}
+
 interface DoctorDashboardProps {
   user: {
     full_name: string;
@@ -48,6 +60,11 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
     queryFn: () => api.getDashboardAlerts(activeHospital),
   });
 
+  const { data: recentLabResults, isLoading: labResultsLoading } = useQuery({
+    queryKey: ["recent-lab-results", hospital],
+    queryFn: () => api.getRecentLabResults(10),
+  });
+
   const filteredPatients = useMemo(() => {
     if (!patients) return [];
     return patients.filter((p: any) => !activeHospital || p.hospital === activeHospital);
@@ -60,6 +77,13 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
   }, [alerts]);
 
   const recentPatients = filteredPatients.slice(0, 3);
+
+  const filteredLabResults = useMemo(() => {
+    if (!recentLabResults) return [];
+    return recentLabResults.filter(
+      (r: LabResult) => !activeHospital || r.hospital === activeHospital
+    );
+  }, [recentLabResults, activeHospital]);
 
   const quickActions: QuickAction[] = [
     {
@@ -170,7 +194,7 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
       </View>
 
       {/* Hospital Filter */}
-      <HospitalFilter value={hospital} onChange={setHospital} colors={colors} />
+      <HospitalFilter value={hospital} onChange={setHospital} colors={colors} isAuthenticated={true} />
 
       <View style={styles.content}>
         {/* Critical Alerts */}
@@ -317,6 +341,63 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
             <Text style={styles.emptyText}>No patients yet. Use "Register Patient" to create one.</Text>
           )}
         </View>
+
+        {/* Recent Lab Results */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Lab Results</Text>
+            {filteredLabResults.length > 5 && (
+              <TouchableOpacity onPress={() => router.push("/(tabs)/search")}>
+                <Text style={styles.viewAllLink}>View all →</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {labResultsLoading ? (
+            <View style={styles.loadingSection}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.loadingText}>Loading lab results…</Text>
+            </View>
+          ) : filteredLabResults.length > 0 ? (
+            filteredLabResults.slice(0, 5).map((result: LabResult) => (
+              <View key={result.id} style={styles.labResultCard}>
+                <View style={styles.labResultHeader}>
+                  <View style={styles.labResultIcon}>
+                    <Ionicons name="flask" size={16} color={colors.watch} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.labResultPatient}>{result.patient_name || "Unknown Patient"}</Text>
+                    <Text style={styles.labResultMeta}>
+                      {result.organism_id} · {result.specimen} · {result.collection_date}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.susceptibilityRow}>
+                  {Object.entries(result.susceptibility).map(([drug, value]) => (
+                    <View
+                      key={drug}
+                      style={[
+                        styles.susceptibilityBadge,
+                        { backgroundColor: value === "S" ? colors.access + "20" : value === "I" ? colors.watch + "20" : colors.reserve + "20" },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.susceptibilityText,
+                          { color: value === "S" ? colors.access : value === "I" ? colors.watch : colors.reserve },
+                        ]}
+                      >
+                        {drug}: {value}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.emptyText}>No lab results yet. Use "Enter Lab Result" to add one.</Text>
+          )}
+        </View>
       </View>
     </ScrollView>
   );
@@ -460,5 +541,42 @@ function makeStyles(c: Palette) {
     patientMeta: { fontSize: 12, color: c.subtext, marginTop: 4 },
     cultureText: { fontSize: 11, color: c.subtext, marginTop: 8, fontStyle: "italic" },
     emptyText: { fontSize: 13, color: c.subtext, textAlign: "center", marginTop: 20 },
+
+    // Lab results
+    labResultCard: {
+      backgroundColor: c.surface,
+      padding: 12,
+      borderRadius: 10,
+      marginBottom: 8,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    labResultHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    labResultIcon: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: c.watch + "20",
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 10,
+    },
+    labResultPatient: { fontSize: 14, fontWeight: "700", color: c.text },
+    labResultMeta: { fontSize: 11, color: c.subtext, marginTop: 2 },
+    susceptibilityRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+    },
+    susceptibilityBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+    },
+    susceptibilityText: { fontSize: 10, fontWeight: "700" },
   });
 }

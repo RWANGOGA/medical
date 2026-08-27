@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, Alert, ActivityIndicator,
@@ -16,12 +16,24 @@ const SIR = ["S", "I", "R"];
 
 export default function AddLabResultScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const queryClient = useQueryClient();
-  const { data: organisms } = useQuery({ queryKey: ["organisms"], queryFn: api.getOrganismsPublic });
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [authLoading, isAuthenticated]);
+
+  const { data: organisms } = useQuery({
+    queryKey: ["organisms"],
+    queryFn: api.getOrganismsPublic,
+    enabled: isAuthenticated,
+  });
 
   const [organismId, setOrganismId] = useState("ecoli");
   const [specimen, setSpecimen] = useState("Urine");
@@ -56,8 +68,12 @@ export default function AddLabResultScreen() {
         susceptibility,
       });
       // Refresh the antibiogram so the dashboard updates immediately
+      // Also invalidate patients and lab results so recent patients updates
       queryClient.invalidateQueries({ queryKey: ["antibiogram"] });
       queryClient.invalidateQueries({ queryKey: ["labresults"] });
+      queryClient.invalidateQueries({ queryKey: ["lab-results"] });
+      queryClient.invalidateQueries({ queryKey: ["patients"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-lab-results"] });
       Alert.alert("Result Saved", "The antibiogram has been updated.", [
         { text: "OK", onPress: () => router.back() },
       ]);
@@ -67,6 +83,15 @@ export default function AddLabResultScreen() {
       setLoading(false);
     }
   };
+
+  // Show loading state while checking auth
+  if (authLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 40, paddingTop: insets.top + 16 }}>

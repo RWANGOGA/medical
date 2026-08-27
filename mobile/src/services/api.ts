@@ -68,7 +68,11 @@ export const api = {
     request<any>("/cds/recommend", { method: "POST", body: JSON.stringify(payload) }),
 
     // Surveillance Dashboard (optional hospital filter)
-  getHospitals: () => request<string[]>("/dashboard/hospitals"),
+  getHospitals: (filterByDoctor = false) => {
+    const query = filterByDoctor ? "?filter_by_doctor=true" : "";
+    return request<string[]>(`/dashboard/hospitals${query}`);
+  },
+  getDoctorHospital: () => request<{ hospital: string }>("/dashboard/doctor-hospital"),
   getDashboardTrends: (hospital?: string) =>
     request<any[]>(`/dashboard/trends${hospital ? `?hospital=${encodeURIComponent(hospital)}` : ""}`),
   getDashboardAntibiogram: (hospital?: string) =>
@@ -107,6 +111,7 @@ export const api = {
 
   // Laboratory
   getLabResults: () => request<any[]>("/lab/results"),
+  getRecentLabResults: (limit = 10) => request<any[]>(`/lab/recent-results?limit=${limit}`),
   addLabResult: (payload: any) =>
     request<any>("/lab/results", { method: "POST", body: JSON.stringify(payload) }),
 

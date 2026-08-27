@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../services/api";
 import { useTheme } from "../context/ThemeContext";
+import { useAuth } from "../context/AuthContext";
 import { Palette } from "../constants/branding";
 import { Screen } from "../components/screen";
 
@@ -31,9 +32,17 @@ const emptyForm = {
 export default function AddPatientScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ editId?: string }>();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [authLoading, isAuthenticated]);
 
   const [phase, setPhase] = useState<Phase>(params.editId ? "form" : "find");
   const [editId, setEditId] = useState<string | null>(params.editId ?? null);
