@@ -1,71 +1,61 @@
 """Migration: Add missing columns to existing tables.
 
-Run this script to sync the database schema with the current models.
+Run with:
+  DATABASE_URL="postgresql+psycopg2://..." python migrate.py
+Or for local Docker:
+  DATABASE_URL="postgresql://postgres:postgres@localhost:5433/amr_db" python migrate.py
 """
-from sqlmodel import Session, text
-from app.db import engine
+import os
+import sys
+
+try:
+    import psycopg2
+except ImportError:
+    print("Installing psycopg2-binary...")
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "psycopg2-binary", "-q"])
+    import psycopg2
 
 
 def migrate():
-    with Session(engine) as session:
-        # Check and add entered_by to patient table
-        try:
-            session.execute(text("SELECT entered_by FROM patient LIMIT 0"))
-            print("✓ patient.entered_by already exists")
-        except Exception:
-            session.execute(text("ALTER TABLE patient ADD COLUMN entered_by VARCHAR DEFAULT ''"))
-            print("✓ Added patient.entered_by")
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        print("Error: DATABASE_URL environment variable not set")
+        sys.exit(1)
 
-        # Check and add reactions to chatmessage table
-        try:
-            session.execute(text("SELECT reactions FROM chatmessage LIMIT 0"))
-            print("✓ chatmessage.reactions already exists")
-        except Exception:
-            session.execute(text("ALTER TABLE chatmessage ADD COLUMN reactions JSON DEFAULT '[]'"))
-            print("✓ Added chatmessage.reactions")
+    # Convert SQLAlchemy URL to psycopg2 DSN
+    # postgresql+psycopg2://user:pass@host/db -> postgresql://user:pass@host/db
+    dsn = db_url.replace("postgresql+psycopg2://", "postgresql://")
 
-        # Check and add is_deleted to chatmessage table
-        try:
-            session.execute(text("SELECT is_deleted FROM chatmessage LIMIT 0"))
-            print("✓ chatmessage.is_deleted already exists")
-        except Exception:
-            session.execute(text("ALTER TABLE chatmessage ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE"))
-            print("✓ Added chatmessage.is_deleted")
+    print(f"Connecting to database...")
+    conn = psycopg2.connect(dsn)
+    conn.autocommit = True
+    cur = conn.cursor()
 
-        # Check and add is_edited to chatmessage table
-        try:
-            session.execute(text("SELECT is_edited FROM chatmessage LIMIT 0"))
-            print("✓ chatmessage.is_edited already exists")
-        except Exception:
-            session.execute(text("ALTER TABLE chatmessage ADD COLUMN is_edited BOOLEAN DEFAULT FALSE"))
-            print("✓ Added chatmessage.is_edited")
+    migrations = [
+        ("patient", "entered_by", "VARCHAR DEFAULT ''"),
+        ("chatmessage", "reactions", "JSON DEFAULT '[]'"),
+        ("chatmessage", "is_deleted", "BOOLEAN DEFAULT FALSE"),
+        ("chatmessage", "is_edited", "BOOLEAN DEFAULT FALSE"),
+        ("chatmessage", "read_by", "JSON DEFAULT '[]'"),
+        ("chatmessage", "file_name", "VARCHAR DEFAULT NULL"),
+        ("labresult", "patient_id", "INTEGER DEFAULT NULL"),
+    ]
 
-        # Check and add read_by to chatmessage table
+    for table, column, dtype in migrations:
         try:
-            session.execute(text("SELECT read_by FROM chatmessage LIMIT 0"))
-            print("✓ chatmessage.read_by already exists")
+            cur.execute(f"SELECT {column} FROM {table} LIMIT 0")
+            print(f"  ✓ {table}.{column} already exists")
         except Exception:
-            session.execute(text("ALTER TABLE chatmessage ADD COLUMN read_by JSON DEFAULT '[]'"))
-            print("✓ Added chatmessage.read_by")
+            try:
+                cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {dtype}")
+                print(f"  ✓ Added {table}.{column}")
+            except Exception as e:
+                print(f"  ✗ Failed to add {table}.{column}: {e}")
 
-        # Check and add file_name to chatmessage table
-        try:
-            session.execute(text("SELECT file_name FROM chatmessage LIMIT 0"))
-            print("✓ chatmessage.file_name already exists")
-        except Exception:
-            session.execute(text("ALTER TABLE chatmessage ADD COLUMN file_name VARCHAR DEFAULT NULL"))
-            print("✓ Added chatmessage.file_name")
-
-        # Check and add patient_id to labresult table
-        try:
-            session.execute(text("SELECT patient_id FROM labresult LIMIT 0"))
-            print("✓ labresult.patient_id already exists")
-        except Exception:
-            session.execute(text("ALTER TABLE labresult ADD COLUMN patient_id INTEGER DEFAULT NULL"))
-            print("✓ Added labresult.patient_id")
-
-        session.commit()
-        print("\nMigration complete!")
+    cur.close()
+    conn.close()
+    print("\nMigration complete!")
 
 
 if __name__ == "__main__":
