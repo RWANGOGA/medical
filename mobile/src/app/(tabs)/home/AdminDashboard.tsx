@@ -142,6 +142,34 @@ export function AdminDashboard({ colors }: AdminDashboardProps) {
     );
   };
 
+  const handleMakeAdmin = async (userId: number, name: string, currentRole: string) => {
+    if (currentRole === "admin") {
+      Alert.alert("Already Admin", `${name} is already an administrator.`);
+      return;
+    }
+    Alert.alert(
+      "Make Admin",
+      `Are you sure you want to promote ${name} to administrator? They will have full access to the admin dashboard.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Make Admin",
+          style: "default",
+          onPress: async () => {
+            try {
+              await api.changeUserRole(userId, "admin");
+              queryClient.invalidateQueries({ queryKey: ["admin-doctors"] });
+              queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
+              Alert.alert("Success", `${name} has been promoted to administrator.`);
+            } catch (e: any) {
+              Alert.alert("Error", e.message || "Failed to change role");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const styles = makeStyles(colors);
 
   const renderOverview = () => (
@@ -206,6 +234,15 @@ export function AdminDashboard({ colors }: AdminDashboardProps) {
               </View>
             </View>
             <View style={styles.listCardActions}>
+              {doctor.role !== "admin" && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: colors.primary + "15" }]}
+                  onPress={() => handleMakeAdmin(doctor.id, doctor.full_name, doctor.role)}
+                >
+                  <Ionicons name="shield-checkmark" size={16} color={colors.primary} />
+                  <Text style={[styles.actionBtnText, { color: colors.primary }]}>Make Admin</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={[styles.actionBtn, { backgroundColor: doctor.is_active ? colors.reserve + "15" : colors.access + "15" }]}
                 onPress={() => handleSuspendDoctor(doctor.id, doctor.is_active)}

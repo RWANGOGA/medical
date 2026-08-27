@@ -93,8 +93,8 @@ export const api = {
     request<{ reply: string }>("/assistant/chat", { method: "POST", body: JSON.stringify({ messages }) }),
 
   // Auth
-  login: (username: string, password: string) =>
-    request<any>("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
+  login: (email: string, password: string) =>
+    request<any>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   register: (data: any) =>
     request<any>("/auth/register", { method: "POST", body: JSON.stringify(data) }),
   getMe: () => request<any>("/auth/me"),

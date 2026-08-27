@@ -22,7 +22,7 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    username: str
+    email: str
     password: str
 
 
@@ -31,6 +31,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     user_id: int
     username: str
+    email: str
     full_name: str
     role: str
     hospital: str
@@ -42,6 +43,7 @@ def _to_response(user: User, token: str) -> TokenResponse:
         access_token=token,
         user_id=user.id,
         username=user.username,
+        email=user.email,
         full_name=user.full_name,
         role=user.role,
         hospital=user.hospital,
@@ -80,9 +82,9 @@ def register(payload: RegisterRequest, session: Session = Depends(get_session)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, session: Session = Depends(get_session)):
-    user = session.exec(select(User).where(User.username == payload.username)).first()
+    user = session.exec(select(User).where(User.email == payload.email)).first()
     if not user or not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Incorrect username or password")
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
 
     token = create_access_token(data={"sub": str(user.id)})
     return _to_response(user, token)

@@ -16,21 +16,22 @@ export default function LoginScreen() {
   const { login } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!username.trim() || !password.trim()) {
-      Alert.alert("Missing Info", "Please enter username and password.");
+    if (!email.trim() || !password.trim()) {
+      Alert.alert("Missing Info", "Please enter email and password.");
       return;
     }
     setLoading(true);
     try {
-      const res = await api.login(username, password);
+      const res = await api.login(email, password);
       await login(res.access_token, {
         id: res.user_id,
         username: res.username,
+        email: res.email,
         full_name: res.full_name,
         role: res.role,
         hospital: res.hospital,
@@ -59,11 +60,12 @@ export default function LoginScreen() {
         <View style={styles.form}>
           <TextInput
             style={styles.input}
-            placeholder="Username"
+            placeholder="Email"
             placeholderTextColor={colors.subtext}
-            value={username}
-            onChangeText={setUsername}
+            value={email}
+            onChangeText={setEmail}
             autoCapitalize="none"
+            keyboardType="email-address"
           />
           <TextInput
             style={styles.input}
