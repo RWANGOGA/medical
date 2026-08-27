@@ -100,6 +100,7 @@ export default function ChatScreen() {
     message: null,
   });
 
+  const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
   const [highlightId, setHighlightId] = useState<number | null>(null);
   const highlightTimeout = useRef<any>(null);
 
@@ -178,11 +179,21 @@ export default function ChatScreen() {
             setOnline(list);
           } else if (data.type === "message") {
             setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data]));
-            if (data.sender_id !== user?.id) setLastIncoming(data.created_at);
+            if (data.sender_id !== user?.id) {
+              setLastIncoming(data.created_at);
+              // Send read receipt for incoming messages
+              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ type: "read", id: data.id }));
+              }
+            }
           } else if (data.type === "delete") {
             setMessages((prev) => prev.filter((m) => m.id !== data.id));
           } else if (data.type === "reaction") {
             setMessages((prev) => prev.map((m) => (m.id === data.id ? { ...m, reactions: data.reactions } : m)));
+          } else if (data.type === "edit") {
+            setMessages((prev) => prev.map((m) => (m.id === data.id ? { ...m, message: data.message, is_edited: data.is_edited } : m)));
+          } else if (data.type === "read") {
+            setMessages((prev) => prev.map((m) => (m.id === data.id ? { ...m, read_by: data.read_by } : m)));
           }
         } catch {}
       };
@@ -280,6 +291,22 @@ export default function ChatScreen() {
         },
       },
     ]);
+  };
+
+  const handleEdit = (m: any) => {
+    setContextMenu({ visible: false, message: null });
+    setEditing({ id: m.id, text: m.message });
+  };
+
+  const submitEdit = () => {
+    if (!editing) return;
+    const text = editing.text.trim();
+    if (!text) return;
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "edit", id: editing.id, message: text }));
+    }
+    setMessages((prev) => prev.map((m) => (m.id === editing.id ? { ...m, message: text, is_edited: true } : m)));
+    setEditing(null);
   };
 
   const toggleReaction = (m: any, emoji: string) => {
@@ -477,9 +504,12 @@ export default function ChatScreen() {
     const senderOnline = online.some((o) => o.id === m.sender_id);
     const translated = translations[`${m.id}:${language}`];
     const showTranslated = language !== "English" && !mine && translated;
-    const read = mine && lastIncoming && new Date(m.created_at).getTime() <= new Date(lastIncoming).getTime();
+    const readBy = m.read_by || [];
+    const readCount = readBy.length;
+    const isRead = mine && readCount > 0;
     const isHighlighted = highlightId === m.id;
     const reactionPills = groupReactions(m.reactions, user?.id);
+    const isDeleted = m.is_deleted;
 
     const bubble = (
       <View style={[styles.msgRow, mine && styles.msgRowMine]}>
@@ -487,13 +517,17 @@ export default function ChatScreen() {
         <View style={[styles.bubbleWrap, mine && styles.bubbleWrapMine]}>
           <View style={[styles.nameRow, mine && styles.nameRowMine]}>
             <Text style={styles.senderName}>{mine ? "You" : m.sender_name}</Text>
-            <Text style={styles.msgTime}>{fmtTime(m.created_at)}</Text>
+            <Text style={styles.msgTime}>
+              {fmtTime(m.created_at)}
+              {m.is_edited && !isDeleted && " (edited)"}
+            </Text>
           </View>
           <TouchableOpacity
             style={[
               styles.bubble,
               mine ? styles.bubbleMine : styles.bubbleOther,
               isHighlighted && styles.bubbleHighlighted,
+              isDeleted && styles.bubbleDeleted,
             ]}
             onLongPress={() => openContextMenu(m)}
             delayLongPress={220}
@@ -537,16 +571,21 @@ export default function ChatScreen() {
               </TouchableOpacity>
             ) : (
               <>
-                <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>
+                <Text style={[styles.bubbleText, mine && styles.bubbleTextMine, isDeleted && styles.deletedText]}>
                   {showTranslated ? translated : m.message}
                 </Text>
                 {showTranslated && <Text style={styles.originalText} numberOfLines={2}>{m.message}</Text>}
               </>
             )}
 
-            {mine && (
+            {mine && !isDeleted && (
               <View style={styles.tickRow}>
-                <Ionicons name={read ? "checkmark-done" : "checkmark"} size={13} color={read ? colors.access : colors.subtext} />
+                <Ionicons
+                  name={isRead ? "checkmark-done" : "checkmark"}
+                  size={13}
+                  color={isRead ? colors.access : colors.subtext}
+                />
+                {isRead && <Text style={styles.readCount}>{readCount > 1 ? `${readCount} read` : "Read"}</Text>}
               </View>
             )}
           </TouchableOpacity>
@@ -601,6 +640,7 @@ export default function ChatScreen() {
 
   const menuMsg = contextMenu.message;
   const menuMine = menuMsg && menuMsg.sender_id === user?.id;
+  const canEdit = menuMine && menuMsg && !menuMsg.is_deleted && !menuMsg.audio_data && !menuMsg.file_data;
 
   const onlinePreview = online.slice(0, 3);
   const onlineOverflow = online.length - onlinePreview.length;
@@ -713,12 +753,46 @@ export default function ChatScreen() {
                 <Text style={styles.menuItemText}>Copy</Text>
               </TouchableOpacity>
             ) : null}
+            {canEdit ? (
+              <TouchableOpacity style={styles.menuItem} onPress={() => menuMsg && handleEdit(menuMsg)}>
+                <Ionicons name="create-outline" size={20} color={colors.text} />
+                <Text style={styles.menuItemText}>Edit</Text>
+              </TouchableOpacity>
+            ) : null}
             {menuMine ? (
               <TouchableOpacity style={styles.menuItem} onPress={() => menuMsg && handleDelete(menuMsg)}>
                 <Ionicons name="trash-outline" size={20} color={colors.reserve} />
                 <Text style={[styles.menuItemText, { color: colors.reserve }]}>Delete</Text>
               </TouchableOpacity>
             ) : null}
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={!!editing} transparent animationType="fade" onRequestClose={() => setEditing(null)}>
+        <Pressable style={styles.menuBackdrop} onPress={() => setEditing(null)}>
+          <View style={styles.menuSheet}>
+            <View style={styles.menuHandle} />
+            <Text style={styles.editTitle}>Edit Message</Text>
+            <TextInput
+              style={styles.editInput}
+              value={editing?.text || ""}
+              onChangeText={(text) => setEditing((prev) => prev ? { ...prev, text } : null)}
+              multiline
+              autoFocus
+            />
+            <View style={styles.editActions}>
+              <TouchableOpacity style={styles.editCancelBtn} onPress={() => setEditing(null)}>
+                <Text style={styles.editCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.editSaveBtn, !editing?.text.trim() && styles.editSaveBtnDisabled]}
+                onPress={submitEdit}
+                disabled={!editing?.text.trim()}
+              >
+                <Text style={styles.editSaveText}>Save</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </Pressable>
       </Modal>
@@ -845,10 +919,13 @@ function makeStyles(c: Palette) {
     bubbleMine: { backgroundColor: c.access + "17", borderWidth: 1, borderColor: c.access + "35" },
     bubbleOther: { backgroundColor: c.surface, borderWidth: 1, borderColor: c.border },
     bubbleHighlighted: { backgroundColor: c.watch + "2E", borderColor: c.watch },
+    bubbleDeleted: { backgroundColor: c.background, borderStyle: "dashed" },
     bubbleText: { fontSize: 14, color: c.text, lineHeight: 20 },
     bubbleTextMine: { color: c.text },
+    deletedText: { fontStyle: "italic", color: c.subtext },
     originalText: { fontSize: 11, color: c.subtext, marginTop: 4, fontStyle: "italic" },
-    tickRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 4 },
+    tickRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 4, alignItems: "center", gap: 4 },
+    readCount: { fontSize: 10, color: c.subtext, fontWeight: "500" },
 
     replyQuote: {
       backgroundColor: c.primary + "0F", padding: 8, borderRadius: 8, marginBottom: 8,
@@ -896,6 +973,19 @@ function makeStyles(c: Palette) {
     quickReactEmoji: { fontSize: 24 },
     menuItem: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 22, paddingVertical: 14 },
     menuItemText: { fontSize: 15, color: c.text, fontWeight: "600" },
+
+    // ---- edit modal ----
+    editTitle: { fontSize: 16, fontWeight: "700", color: c.text, paddingHorizontal: 22, paddingVertical: 12 },
+    editInput: {
+      backgroundColor: c.background, borderRadius: 12, padding: 14, marginHorizontal: 16,
+      fontSize: 14, color: c.text, borderWidth: 1, borderColor: c.border, maxHeight: 120,
+    },
+    editActions: { flexDirection: "row", justifyContent: "flex-end", gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
+    editCancelBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: c.border },
+    editCancelText: { fontSize: 14, color: c.text, fontWeight: "600" },
+    editSaveBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, backgroundColor: c.primary },
+    editSaveBtnDisabled: { opacity: 0.45 },
+    editSaveText: { fontSize: 14, color: c.onPrimary, fontWeight: "700" },
 
     // ---- composer ----
     replyPreview: {
