@@ -39,9 +39,11 @@ jobs:
           EXPO_PUBLIC_WS_URL: wss://medical-sbit.onrender.com/api/v1/chat/ws
         run: npx expo export --platform web --output-dir dist
 
-      - name: SPA fallback (so refresh on any screen works)
+      - name: SPA fallback & prevent Jekyll
         working-directory: mobile
-        run: cp dist/index.html dist/404.html
+        run: |
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
