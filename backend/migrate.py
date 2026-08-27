@@ -33,6 +33,7 @@ def migrate():
     cur = conn.cursor()
 
     migrations = [
+        ("patient", "created_at", "VARCHAR DEFAULT ''"),
         ("patient", "entered_by", "VARCHAR DEFAULT ''"),
         ("chatmessage", "reactions", "JSON DEFAULT '[]'"),
         ("chatmessage", "is_deleted", "BOOLEAN DEFAULT FALSE"),
