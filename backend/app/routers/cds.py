@@ -20,12 +20,31 @@ INTRINSIC_RESISTANCE = {
     "pseudo": {"amoxi", "coamox", "ceftri", "cotrim", "nitro", "azithro"},
     "saureus": {"nitro", "colistin"},
     "ecoli": set(),
+    "efaecium": {"ceftri", "cefaz", "cefepime", "ceftaz", "clinda", "cotrim"},
+    "ecloacae": {"ceftri", "cefaz", "coamox"},
+    "abaumannii": {"amoxi", "coamox", "ceftri", "nitro", "fosfo"},
+    "smaltophilia": {"merope", "amikacin", "genta", "ceftri", "amoxi", "coamox"},
+    "styphi": set(),
+    "shigella": set(),
+    "gonorrhoeae": {"cotrim", "nitro"},
+    "pneumoniae": {"nitro", "colistin", "genta"},
 }
 
 # Agents whose clinical usefulness depends on the infection site.
 URINE_ONLY = {
     "nitro": "Nitrofurantoin achieves therapeutic levels only in urine; it is not "
     "appropriate for pyelonephritis, bacteremia or other tissue infection.",
+    "fosfo": "Fosfomycin is used as a single oral dose for uncomplicated "
+    "cystitis and does not treat tissue infection.",
+}
+
+POOR_URINE = {
+    "tige": "Tigecycline does not achieve reliable urinary concentrations.",
+}
+
+POOR_BLOOD = {
+    "tige": "Tigecycline is not recommended for bloodstream infection because "
+    "serum concentrations are low.",
 }
 
 URINARY_SITES = {"urinary", "urine", "uti", "cystitis", "bladder"}
@@ -112,23 +131,27 @@ def _susceptibility_lookup(
 
 
 def _site_allows(drug_id: str, site: str, severe: bool) -> tuple[bool, str]:
+    if site in URINARY_SITES and drug_id in POOR_URINE:
+        return False, POOR_URINE[drug_id]
+    if site in {"blood", "bacteremia", "bacteraemia"} and drug_id in POOR_BLOOD:
+        return False, POOR_BLOOD[drug_id]
+
     if drug_id not in URINE_ONLY:
         return True, ""
     # Site not supplied: keep the drug but flag it (handled by the caller).
     if not site:
         return True, ""
-    if drug_id == "nitro":
-        if site in PYELONEPHRITIS_SITES:
-            return False, (
-                "does not achieve tissue levels and cannot treat pyelonephritis"
-            )
-        if site not in URINARY_SITES:
-            return False, "is active only in urine and cannot treat this site"
-        if severe:
-            return False, (
-                "is not appropriate for severe or systemic infection; use a "
-                "parenteral agent with tissue penetration"
-            )
+    if site in PYELONEPHRITIS_SITES:
+        return False, (
+            "does not achieve tissue levels and cannot treat pyelonephritis"
+        )
+    if site not in URINARY_SITES:
+        return False, "is active only in urine and cannot treat this site"
+    if severe:
+        return False, (
+            "is not appropriate for severe or systemic infection; use a "
+            "parenteral agent with tissue penetration"
+        )
     return True, ""
 
 

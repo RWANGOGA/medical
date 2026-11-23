@@ -3,6 +3,11 @@ from sqlmodel import Session, select
 from app.models import Organism, Antibiotic, Patient, TreatmentProtocol, User
 from app.services.auth import hash_password
 from app.models import Antibiotic, Patient, Organism, LabResult
+from app.data.global_amr import (
+    ANTIBIOTICS as GLOBAL_ANTIBIOTICS,
+    ORGANISMS as GLOBAL_ORGANISMS,
+    PROTOCOLS as GLOBAL_PROTOCOLS,
+)
 
 def seed_database(session: Session):
     """Idempotently load reference data and demo content.
@@ -36,6 +41,7 @@ def seed_database(session: Session):
                  virulence_factors=["Exotoxin A", "Biofilm"], risk_factors=["Ventilation", "Cystic fibrosis"],
                  clinical_importance="Intrinsically resistant; WHO critical-priority pathogen.", resistance_rate=49),
     ]
+    organisms.extend(Organism(**item) for item in GLOBAL_ORGANISMS)
     existing_organism_ids = {o.id for o in session.exec(select(Organism)).all()}
     for org in organisms:
         if org.id not in existing_organism_ids:
@@ -108,6 +114,7 @@ def seed_database(session: Session):
                    renal_adjustment="Dose by renal function with therapeutic drug monitoring.",
                    tags=["glycopeptide", "MRSA"]),
     ]
+    antibiotics.extend(Antibiotic(**item) for item in GLOBAL_ANTIBIOTICS)
     existing_antibiotic_ids = {a.id for a in session.exec(select(Antibiotic)).all()}
     for abx in antibiotics:
         if abx.id not in existing_antibiotic_ids:
@@ -148,6 +155,7 @@ def seed_database(session: Session):
             monitoring=["Renal function", "Repeat culture and susceptibility at 48-72h", "Aminoglycoside levels if used"]
         ),
     ]
+    protocols.extend(TreatmentProtocol(**item) for item in GLOBAL_PROTOCOLS)
     existing_protocol_organisms = {
         p.organism_id for p in session.exec(select(TreatmentProtocol)).all()
     }

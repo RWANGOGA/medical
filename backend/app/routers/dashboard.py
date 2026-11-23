@@ -8,6 +8,7 @@ import re
 
 from app.db import get_session
 from app.models import Antibiotic, Patient, Organism, LabResult, User
+from app.services.antibiogram import aggregate, modal_value, organism_names
 from app.services.auth import get_current_user, get_optional_user
 
 router = APIRouter(prefix="/dashboard", tags=["Surveillance Dashboard"])
@@ -132,33 +133,21 @@ def get_trends(hospital: Optional[str] = Query(None), session: Session = Depends
 
 @router.get("/antibiogram", response_model=AntibiogramData)
 def get_antibiogram(hospital: Optional[str] = Query(None), session: Session = Depends(get_session)):
-    """Live antibiogram aggregated from lab results."""
-    organisms_list = ["E. coli", "K. pneumoniae", "S. aureus", "P. aeruginosa"]
-    drugs_list = ["Ampicillin", "Ceftriaxone", "Pip-Tazo", "Meropenem", "Vancomycin"]
-    org_name_map = {"ecoli": "E. coli", "kpneumo": "K. pneumoniae", "saureus": "S. aureus", "pseudo": "P. aeruginosa"}
+    """Live antibiogram aggregated from lab results.
 
+    The organism and drug panels are derived from the data so new priority
+    pathogens appear without a code change.
+    """
     lab_results = session.exec(select(LabResult)).all()
     if hospital:
         lab_results = [l for l in lab_results if l.hospital == hospital]
 
-    org_drug_values = defaultdict(lambda: defaultdict(list))
-    for lr in lab_results:
-        org_display = org_name_map.get(lr.organism_id)
-        if not org_display:
-            continue
-        for drug, val in (lr.susceptibility or {}).items():
-            if drug in drugs_list and val in ("S", "I", "R"):
-                org_drug_values[org_display][drug].append(val)
-
-    grid = []
-    for org in organisms_list:
-        row = []
-        for drug in drugs_list:
-            values = org_drug_values[org][drug]
-            row.append(max(set(values), key=values.count) if values else "-")
-        grid.append(row)
-
-    return AntibiogramData(organisms=organisms_list, drugs=drugs_list, grid=grid)
+    organisms, drugs, values = aggregate(lab_results, organism_names(session))
+    grid = [
+        [modal_value(values[organism][drug]) for drug in drugs]
+        for organism in organisms
+    ]
+    return AntibiogramData(organisms=organisms, drugs=drugs, grid=grid)
 
 
 # --- PUBLIC ENDPOINTS ---
@@ -204,26 +193,26 @@ def get_mechanisms():
 @router.get("/antibiogram-stats")
 def get_antibiogram_stats(hospital: Optional[str] = Query(None), session: Session = Depends(get_session)):
     """Detailed antibiogram: S/I/R counts, isolate numbers and %S per cell."""
-    organisms_list = ["E. coli", "K. pneumoniae", "S. aureus", "P. aeruginosa"]
-    drugs_list = ["Ampicillin", "Ceftriaxone", "Pip-Tazo", "Meropenem", "Vancomycin"]
-    org_name_map = {"ecoli": "E. coli", "kpneumo": "K. pneumoniae", "saureus": "S. aureus", "pseudo": "P. aeruginosa"}
-
     lab_results = session.exec(select(LabResult)).all()
     if hospital:
         lab_results = [l for l in lab_results if l.hospital == hospital]
 
-    cells = {org: {drug: {"s": 0, "i": 0, "r": 0, "n": 0, "pct_s": 0.0} for drug in drugs_list} for org in organisms_list}
-    for lr in lab_results:
-        org = org_name_map.get(lr.organism_id)
-        if not org:
-            continue
-        for drug, val in (lr.susceptibility or {}).items():
-            if drug in cells[org] and val in ("S", "I", "R"):
-                c = cells[org][drug]
-                c[val.lower()] += 1
-                c["n"] += 1
-    for org in organisms_list:
-        for drug in drugs_list:
-            c = cells[org][drug]
-            c["pct_s"] = round(100 * c["s"] / c["n"]) if c["n"] else 0.0
-    return {"organisms": organisms_list, "drugs": drugs_list, "cells": cells}    
+    organisms, drugs, values = aggregate(lab_results, organism_names(session))
+    cells = {
+        organism: {
+            drug: {"s": 0, "i": 0, "r": 0, "n": 0, "pct_s": 0.0}
+            for drug in drugs
+        }
+        for organism in organisms
+    }
+    for organism in organisms:
+        for drug in drugs:
+            entries = values[organism][drug]
+            cell = cells[organism][drug]
+            for entry in entries:
+                cell[entry.lower()] += 1
+            cell["n"] = len(entries)
+            cell["pct_s"] = (
+                round(100 * cell["s"] / cell["n"]) if cell["n"] else 0.0
+            )
+    return {"organisms": organisms, "drugs": drugs, "cells": cells}    

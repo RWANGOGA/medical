@@ -14,7 +14,20 @@ def _joined(body, field):
 
 
 def test_every_seeded_organism_has_a_protocol(client, auth_headers):
-    for organism_id in ("ecoli", "kpneumo", "saureus", "pseudo"):
+    for organism_id in (
+        "ecoli",
+        "kpneumo",
+        "saureus",
+        "pseudo",
+        "efaecium",
+        "ecloacae",
+        "abaumannii",
+        "smaltophilia",
+        "styphi",
+        "shigella",
+        "gonorrhoeae",
+        "pneumoniae",
+    ):
         body = _recommend(client, auth_headers, organism_id=organism_id)
         assert body["first_line"] or body["second_line"] or body["reserve"]
 
@@ -127,3 +140,39 @@ def test_intermediate_result_produces_a_warning(client, auth_headers):
 def test_missing_site_warns_about_urine_only_agents(client, auth_headers):
     body = _recommend(client, auth_headers, organism_id="ecoli")
     assert any("Infection site" in x for x in body["warnings"])
+
+
+def test_tigecycline_excluded_from_urinary_infection(client, auth_headers):
+    body = _recommend(
+        client,
+        auth_headers,
+        organism_id="smaltophilia",
+        infection_site="urinary",
+        culture_susceptibility={"Tigecycline": "S"},
+    )
+    assert any("Tigecycline" in x for x in body["avoid"])
+
+
+def test_tigecycline_excluded_from_bloodstream_infection(client, auth_headers):
+    body = _recommend(
+        client,
+        auth_headers,
+        organism_id="abaumannii",
+        infection_site="blood",
+        culture_susceptibility={"Tigecycline": "S"},
+    )
+    assert any("Tigecycline" in x for x in body["avoid"])
+
+
+def test_new_priority_pathogen_is_culture_directed(client, auth_headers):
+    body = _recommend(
+        client,
+        auth_headers,
+        organism_id="abaumannii",
+        infection_site="respiratory",
+        culture_susceptibility={"Meropenem": "R", "Colistin": "S"},
+    )
+    assert body["culture_directed"] is True
+    assert any("Meropenem" in x for x in body["avoid"])
+    # Colistin is the only susceptible option, so it is promoted to the front.
+    assert any("Colistin" in x for x in body["first_line"])

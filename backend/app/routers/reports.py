@@ -12,18 +12,10 @@ from app.db import get_session
 from app.models import Antibiotic, LabResult, Patient, User
 from app.routers.lab import _scope_lab_results
 from app.routers.patients import _scope_to_hospital
+from app.services.antibiogram import aggregate, modal_value, organism_names
 from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
-
-ORGANISMS = ["E. coli", "K. pneumoniae", "S. aureus", "P. aeruginosa"]
-DRUGS = ["Ampicillin", "Ceftriaxone", "Pip-Tazo", "Meropenem", "Vancomycin"]
-ORG_MAP = {
-    "ecoli": "E. coli",
-    "kpneumo": "K. pneumoniae",
-    "saureus": "S. aureus",
-    "pseudo": "P. aeruginosa",
-}
 
 
 @router.get("/monthly")
@@ -78,33 +70,25 @@ def monthly_report(
 
     # Antibiogram
     w.writerow(["== ANTIBIOGRAM (S/I/R) =="])
-    org_drug = defaultdict(lambda: defaultdict(list))
-    for lr in labs:
-        org = ORG_MAP.get(lr.organism_id)
-        if not org:
-            continue
-        for drug, val in (lr.susceptibility or {}).items():
-            if drug in DRUGS and val in ("S", "I", "R"):
-                org_drug[org][drug].append(val)
+    organisms, drugs, values = aggregate(labs, organism_names(session))
 
-    w.writerow(["Organism"] + DRUGS)
-    for org in ORGANISMS:
-        row = [org]
-        for drug in DRUGS:
-            vals = org_drug[org][drug]
-            row.append(max(set(vals), key=vals.count) if vals else "-")
+    w.writerow(["Organism"] + drugs)
+    for organism in organisms:
+        row = [organism]
+        for drug in drugs:
+            row.append(modal_value(values[organism][drug]))
         w.writerow(row)
     w.writerow([])
 
     # Resistance alerts summary
     w.writerow(["== RESISTANCE SUMMARY =="])
-    for org in ORGANISMS:
-        for drug in DRUGS:
-            vals = org_drug[org][drug]
+    for organism in organisms:
+        for drug in drugs:
+            vals = values[organism][drug]
             if vals:
                 r_rate = round(vals.count("R") / len(vals) * 100)
                 if r_rate >= 50:
-                    w.writerow([f"HIGH RESISTANCE: {org} vs {drug}", f"{r_rate}% R"])
+                    w.writerow([f"HIGH RESISTANCE: {organism} vs {drug}", f"{r_rate}% R"])
     w.writerow([])
 
     filename = f"amr-report-{now:%Y-%m-%d-%H%M}.csv"
