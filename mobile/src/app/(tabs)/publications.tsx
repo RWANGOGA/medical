@@ -1,4 +1,4 @@
-import { PublicationsScreen } from "./home/PublicationsScreen";
+import { PublicationsScreen } from "../../features/home/PublicationsScreen";
 import { useTheme } from "../../context/ThemeContext";
 
 export default function PublicationsTab() {

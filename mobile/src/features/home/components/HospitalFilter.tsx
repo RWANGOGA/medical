@@ -3,8 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { ScrollView, TouchableOpacity, Text, StyleSheet, View } from "react-native";
 import { LayoutAnimation, Platform, UIManager } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { api } from "../../../../services/api";
-import { Palette } from "../../../../constants/branding";
+import { api } from "../../../services/api";
+import { Palette } from "../../../constants/branding";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);

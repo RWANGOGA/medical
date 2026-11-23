@@ -2,9 +2,9 @@ import { useMemo } from "react";
 import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
-import { DoctorDashboard } from "./home/DoctorDashboard";
-import { AdminDashboard } from "./home/AdminDashboard";
-import { PublicHome } from "./home/PublicHome";
+import { DoctorDashboard } from "../../features/home/DoctorDashboard";
+import { AdminDashboard } from "../../features/home/AdminDashboard";
+import { PublicHome } from "../../features/home/PublicHome";
 
 export default function HomeScreen() {
   const { isAuthenticated, isAdmin, user, isLoading } = useAuth();

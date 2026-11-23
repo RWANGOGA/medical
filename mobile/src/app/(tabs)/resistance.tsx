@@ -168,7 +168,7 @@ export default function ResistanceScreen() {
   const [hospital, setHospital] = useState(ALL);
   const active = hospital === ALL ? undefined : hospital;
 
-  const { data: hospitals } = useQuery({ queryKey: ["hospitals"], queryFn: api.getHospitals });
+  const { data: hospitals } = useQuery({ queryKey: ["hospitals"], queryFn: () => api.getHospitals() });
   const { data: trends, isLoading: lt } = useQuery({ queryKey: ["trends", hospital], queryFn: () => api.getDashboardTrends(active) });
   const { data: organisms, isLoading: lo } = useQuery({ queryKey: ["organisms"], queryFn: api.getOrganisms });
   const { data: stats, isLoading: la } = useQuery({ queryKey: ["abx-stats", hospital], queryFn: () => api.getAntibiogramStats(active) });
