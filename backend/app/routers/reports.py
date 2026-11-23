@@ -9,30 +9,51 @@ from fastapi.responses import Response
 from sqlmodel import Session, select
 
 from app.db import get_session
-from app.models import Antibiotic, LabResult, Patient
+from app.models import Antibiotic, LabResult, Patient, User
+from app.routers.lab import _scope_lab_results
+from app.routers.patients import _scope_to_hospital
+from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
 ORGANISMS = ["E. coli", "K. pneumoniae", "S. aureus", "P. aeruginosa"]
 DRUGS = ["Ampicillin", "Ceftriaxone", "Pip-Tazo", "Meropenem", "Vancomycin"]
-ORG_MAP = {"ecoli": "E. coli", "kpneumo": "K. pneumoniae", "saureus": "S. aureus", "pseudo": "P. aeruginosa"}
+ORG_MAP = {
+    "ecoli": "E. coli",
+    "kpneumo": "K. pneumoniae",
+    "saureus": "S. aureus",
+    "pseudo": "P. aeruginosa",
+}
 
 
 @router.get("/monthly")
-def monthly_report(hospital: Optional[str] = Query(None), session: Session = Depends(get_session)):
+def monthly_report(
+    hospital: Optional[str] = Query(None),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Stewardship report, limited to the data the caller may see.
+
+    The report is aggregate (no patient identifiers) but still describes
+    facility-level workload and resistance, so it is not public.
+    """
     now = datetime.now(timezone.utc)
     buf = io.StringIO()
     w = csv.writer(buf)
 
-    patients = session.exec(select(Patient)).all()
-    labs = session.exec(select(LabResult)).all()
+    patients = session.exec(
+        _scope_to_hospital(select(Patient), current_user)
+    ).all()
+    labs = session.exec(
+        _scope_lab_results(select(LabResult), current_user)
+    ).all()
     if hospital:
         patients = [p for p in patients if p.hospital == hospital]
         labs = [l for l in labs if l.hospital == hospital]
 
     w.writerow(["AMR STEWARDSHIP MONTHLY REPORT"])
     w.writerow(["Generated", now.isoformat()])
-    w.writerow(["Scope", hospital or "All hospitals"])
+    w.writerow(["Scope", hospital or "All accessible hospitals"])
     w.writerow([])
 
     # AWaRe summary
@@ -49,7 +70,7 @@ def monthly_report(hospital: Optional[str] = Query(None), session: Session = Dep
     w.writerow(["Total patients", len(patients)])
     w.writerow(["Total lab results", len(labs)])
     by_hosp = defaultdict(int)
-    for p in session.exec(select(Patient)).all():
+    for p in patients:
         by_hosp[p.hospital or "Unknown"] += 1
     for h in sorted(by_hosp):
         w.writerow([f"Patients - {h}", by_hosp[h]])

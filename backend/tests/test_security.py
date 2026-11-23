@@ -96,6 +96,20 @@ def test_public_hospital_filter_does_not_leak_doctor_scope(client):
     assert res.json() == []
 
 
+def test_monthly_report_requires_authentication(client):
+    assert client.get("/api/v1/reports/monthly").status_code == 401
+
+
+def test_monthly_report_is_scoped_to_the_caller(client, auth_headers):
+    res = client.get("/api/v1/reports/monthly", headers=auth_headers)
+    assert res.status_code == 200
+    body = res.text
+    assert "AMR STEWARDSHIP MONTHLY REPORT" in body
+    # The caller is a Test Hospital clinician, so other sites must not appear.
+    assert "Remote Regional Hospital" not in body
+    assert "RECENT ACTIVITY" not in body
+
+
 def test_audit_logs_scoped_to_current_user(client, auth_headers, admin_headers):
     # The admin performs an audited action, then a clinician must not see it.
     client.post("/api/v1/patients/", json={
