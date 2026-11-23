@@ -61,6 +61,9 @@ def _ensure_new_columns() -> None:
             "duplicate_of": "INTEGER DEFAULT NULL",
             "infection_origin": "VARCHAR DEFAULT 'unknown'",
             "ast_standard": "VARCHAR DEFAULT ''",
+            "age": "INTEGER DEFAULT NULL",
+            "sex": "VARCHAR DEFAULT ''",
+            "unit": "VARCHAR DEFAULT ''",
         },
     }
 

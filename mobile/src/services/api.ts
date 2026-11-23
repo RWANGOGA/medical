@@ -108,6 +108,8 @@ export const api = {
   getAntibioticsPublic: () => request<any[]>("/dashboard/antibiotics-public"),
   getSurveillanceQuality: (hospital?: string) =>
     request<any>(`/dashboard/surveillance-quality${hospital ? `?hospital=${encodeURIComponent(hospital)}` : ""}`),
+  getAntibiogramStratified: (hospital?: string) =>
+    request<any>(`/dashboard/antibiogram-stratified${hospital ? `?hospital=${encodeURIComponent(hospital)}` : ""}`),
 
   // Antimicrobial consumption (WHO GLASS-AMC)
   getAmcSummary: (hospital?: string, fromMonth?: string, toMonth?: string) => {

@@ -35,6 +35,9 @@ class LabResultCreate(BaseModel):
     ast_standard: str = Field(
         "", description="Breakpoint standard used, e.g. EUCAST 2025 or CLSI M100 Ed34"
     )
+    age: Optional[int] = Field(None, ge=0, le=120, description="Patient age in years")
+    sex: str = Field("", description="M, F or other local code")
+    unit: str = Field("", description="Ward or service, e.g. ICU, Medical ward")
 
 
 def _scope_lab_results(stmt, current_user: User):
@@ -70,10 +73,9 @@ def create_lab_result(
 
     # Link to an existing patient the caller can access, or create one.
     linked_patient_id = payload.patient_id
-    if linked_patient_id:
-        linked = session.get(Patient, linked_patient_id)
-        if linked is None:
-            linked_patient_id = None
+    linked_patient = session.get(Patient, linked_patient_id) if linked_patient_id else None
+    if linked_patient_id and linked_patient is None:
+        linked_patient_id = None
     if not linked_patient_id and payload.patient_name:
         existing = session.exec(
             _scope_to_hospital(
@@ -90,14 +92,23 @@ def create_lab_result(
             new_patient = Patient(
                 name=payload.patient_name.strip(),
                 hospital=hospital,
-                age=0,
-                sex="Unknown",
+                age=payload.age or 0,
+                sex=payload.sex.strip() or "Unknown",
                 diagnosis="Pending diagnosis",
                 entered_by=current_user.username,
             )
             session.add(new_patient)
             session.flush()  # Get the ID without committing
             linked_patient_id = new_patient.id
+
+    # GLASS / EARS-Net stratification: inherit demographics from the linked
+    # patient when the submitter did not provide them on the isolate itself.
+    age = payload.age
+    if age is None and linked_patient is not None and linked_patient.age:
+        age = linked_patient.age
+    sex = payload.sex.strip()
+    if not sex and linked_patient is not None:
+        sex = linked_patient.sex or ""
 
     collection_date = payload.collection_date or datetime.now(timezone.utc).strftime(
         "%Y-%m-%d"
@@ -114,6 +125,9 @@ def create_lab_result(
         patient_key=patient_key(linked_patient_id, payload.patient_name, hospital),
         infection_origin=origin,
         ast_standard=payload.ast_standard.strip(),
+        age=age,
+        sex=sex,
+        unit=payload.unit.strip(),
     )
 
     # GLASS first-isolate rule: repeat isolates from the same patient, pathogen
@@ -173,6 +187,9 @@ def get_recent_results(
                 r.infection_origin, "Not recorded"
             ),
             "ast_standard": r.ast_standard,
+            "age": r.age,
+            "sex": r.sex,
+            "unit": r.unit,
         }
         for r in results
     ]

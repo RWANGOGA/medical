@@ -55,28 +55,32 @@ def test_specimen_normalisation_and_invasive_definition():
 
 def test_repeat_isolate_is_marked_duplicate_and_excluded_from_antibiogram(client, auth_headers):
     name = _name()
+    hospital = f"Surveillance {uuid.uuid4().hex[:8]}"
     first = _post_isolate(
-        client, auth_headers, patient_name=name, susceptibility={"Nitrofurantoin": "R"}
+        client, auth_headers, patient_name=name, hospital=hospital,
+        susceptibility={"Nitrofurantoin": "R"},
     )
     assert first["is_first_isolate"] is True
     assert first["infection_origin"] == "unknown"
     assert first["ast_standard"] == ""
 
-    before = client.get(f"{BASE_DASH}/antibiogram-stats").json()
+    scope = f"hospital={hospital.replace(' ', '%20')}"
+    before = client.get(f"{BASE_DASH}/antibiogram-stats?{scope}").json()
     n_before = before["cells"]["E. coli"]["Nitrofurantoin"]["n"]
 
     second = _post_isolate(
-        client, auth_headers, patient_name=name, susceptibility={"Nitrofurantoin": "S"}
+        client, auth_headers, patient_name=name, hospital=hospital,
+        susceptibility={"Nitrofurantoin": "S"},
     )
     assert second["is_first_isolate"] is False
     assert second["duplicate_of"] == first["id"]
 
-    after = client.get(f"{BASE_DASH}/antibiogram-stats").json()
+    after = client.get(f"{BASE_DASH}/antibiogram-stats?{scope}").json()
     assert after["cells"]["E. coli"]["Nitrofurantoin"]["n"] == n_before
     assert after["cells"]["E. coli"]["Nitrofurantoin"]["r"] == before["cells"]["E. coli"]["Nitrofurantoin"]["r"]
 
     included = client.get(
-        f"{BASE_DASH}/antibiogram-stats?include_duplicates=true"
+        f"{BASE_DASH}/antibiogram-stats?{scope}&include_duplicates=true"
     ).json()
     assert included["cells"]["E. coli"]["Nitrofurantoin"]["n"] == n_before + 1
 

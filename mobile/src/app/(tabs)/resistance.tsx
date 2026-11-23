@@ -50,6 +50,103 @@ function QualityCard({ quality, loading, colors, styles }: any) {
   );
 }
 
+function StratifiedCard({ data, colors, styles }: any) {
+  const [dimension, setDimension] = useState("age_group");
+  const [pair, setPair] = useState<string | null>(null);
+
+  const dims = data?.dimensions || {};
+  const dimKeys = Object.keys(dims);
+  const cells = dimKeys.flatMap((key) =>
+    dims[key].groups.flatMap((group: any) => group.cells || [])
+  );
+  const pairs = Array.from(
+    new Set(cells.map((cell: any) => `${cell.organism} · ${cell.drug}`))
+  ).slice(0, 10);
+  const activePair = pair && pairs.includes(pair) ? pair : pairs[0];
+  const groups = dims[dimension]?.groups || [];
+
+  if (!dimKeys.length) {
+    return <Text style={styles.footnote}>No isolates available for stratification.</Text>;
+  }
+
+  return (
+    <View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+        {dimKeys.map((key) => (
+          <TouchableOpacity
+            key={key}
+            style={[styles.chip, dimension === key && styles.chipActive, { marginRight: 6 }]}
+            onPress={() => setDimension(key)}
+          >
+            <Text style={[styles.chipText, dimension === key && styles.chipTextActive]}>
+              {dims[key].label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {activePair ? (
+        <>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+            {pairs.map((item) => (
+              <TouchableOpacity
+                key={item}
+                style={[styles.chip, activePair === item && styles.chipActive, { marginRight: 6 }]}
+                onPress={() => setPair(item)}
+              >
+                <Text style={[styles.chipText, activePair === item && styles.chipTextActive]}>
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {groups.map((group: any) => {
+            const [organism, drug] = activePair.split(" · ");
+            const cell = (group.cells || []).find(
+              (c: any) => c.organism === organism && c.drug === drug
+            );
+            return (
+              <View key={group.key} style={styles.stratRow}>
+                <Text style={[styles.stratLabel, { color: colors.text }]} numberOfLines={1}>
+                  {group.label}
+                </Text>
+                <View style={[styles.stratTrack, { backgroundColor: colors.background }]}>
+                  <View
+                    style={[
+                      styles.stratFill,
+                      {
+                        width: cell ? `${cell.pct_r}%` : "0%",
+                        backgroundColor: colors.reserve,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={[styles.stratValue, { color: colors.text }]}>
+                  {cell ? `${cell.pct_r}% R` : "—"}
+                </Text>
+                <Text style={[styles.stratNote, { color: colors.subtext }]}>
+                  {cell ? `n=${cell.n}` : `n=0`}
+                </Text>
+                {cell?.small_sample && (
+                  <Text style={[styles.stratNote, { color: colors.watch }]}>⚠</Text>
+                )}
+              </View>
+            );
+          })}
+        </>
+      ) : (
+        <Text style={styles.footnote}>No S/I/R cells yet for these isolates.</Text>
+      )}
+
+      <Text style={styles.footnote}>
+        {data.method}. ⚠ marks groups with fewer than {data.min_reliable_n} isolates — interpret
+        with caution.
+      </Text>
+    </View>
+  );
+}
+
 function LineChart({ years, series, W, colors }: any) {
   const IW = W - L - R, IH = H - T - B;
   const y = (v: number) => T + IH - (v / MAX) * IH;
@@ -204,6 +301,7 @@ export default function ResistanceScreen() {
   const { data: organisms, isLoading: lo } = useQuery({ queryKey: ["organisms"], queryFn: api.getOrganisms });
   const { data: stats, isLoading: la } = useQuery({ queryKey: ["abx-stats", hospital], queryFn: () => api.getAntibiogramStats(active) });
   const { data: quality, isLoading: lq } = useQuery({ queryKey: ["surveillance-quality", hospital], queryFn: () => api.getSurveillanceQuality(active) });
+  const { data: stratified, isLoading: ls } = useQuery({ queryKey: ["antibiogram-stratified", hospital], queryFn: () => api.getAntibiogramStratified(active) });
 
   const whoColor = (p: string) => (p === "CRITICAL" ? colors.reserve : colors.watch);
   const getSirColor = (val: string) => (val === "S" ? colors.access : val === "I" ? colors.watch : val === "R" ? colors.reserve : colors.subtext);
@@ -242,6 +340,11 @@ export default function ResistanceScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Surveillance data quality (WHO GLASS)</Text>
           <QualityCard quality={quality} loading={lq} colors={colors} styles={styles} />
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Stratified resistance (age, sex, ward, origin)</Text>
+          {ls ? <ActivityIndicator color={colors.primary} /> : <StratifiedCard data={stratified} colors={colors} styles={styles} />}
         </View>
 
         <View style={styles.card}>
@@ -355,6 +458,12 @@ function makeStyles(c: Palette) {
     qualityItem: { minWidth: 92, flex: 1, backgroundColor: c.background, borderRadius: 10, padding: 10, alignItems: "center" },
     qualityValue: { fontSize: 16, fontWeight: "800" },
     qualityLabel: { fontSize: 10, textAlign: "center", marginTop: 2 },
+    stratRow: { flexDirection: "row", alignItems: "center", marginBottom: 10, gap: 6 },
+    stratLabel: { width: 90, fontSize: 11, fontWeight: "600" },
+    stratTrack: { flex: 1, height: 12, borderRadius: 6, overflow: "hidden" },
+    stratFill: { height: 12, borderRadius: 6 },
+    stratValue: { width: 48, fontSize: 11, fontWeight: "800", textAlign: "right" },
+    stratNote: { fontSize: 9 },
     empRow: { marginBottom: 12 },
     empDrug: { fontSize: 13, fontWeight: "700", color: c.text },
     empPct: { fontSize: 12, fontWeight: "800" },

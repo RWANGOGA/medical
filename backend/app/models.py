@@ -144,7 +144,16 @@ class LabResult(SQLModel, table=True):
     is_first_isolate: bool = True
     duplicate_of: Optional[int] = None
     infection_origin: str = "unknown"
-    ast_standard: str = ""  
+    ast_standard: str = ""
+
+    # GLASS / EARS-Net stratification. Age and sex are copied from the linked
+    # patient when available; unit is the ward or service where the specimen
+    # was taken. They are stored on the isolate so historic results remain
+    # stratifiable even if a patient record is later edited or deleted.
+    age: Optional[int] = None
+    sex: str = ""
+    unit: str = ""
+
 
 class ChatMessage(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

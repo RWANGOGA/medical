@@ -321,11 +321,51 @@ def seed_database(session: Session):
             "Sputum": "healthcare-associated",
             "Wound swab": "community",
         }
+        unit_by_specimen = {
+            "Urine": "Medical ward",
+            "Blood": "ICU",
+            "Sputum": "ICU",
+            "Wound swab": "Surgical ward",
+        }
+        patient_metadata = {
+            p.name: (p.age, p.sex) for p in session.exec(select(Patient)).all()
+        }
         for lr in lab_results:
             lr.infection_origin = origin_by_specimen.get(lr.specimen, "unknown")
             lr.ast_standard = "EUCAST 2025"
             lr.patient_key = patient_key(None, lr.patient_name, lr.hospital)
+            lr.age, lr.sex = patient_metadata.get(lr.patient_name, (None, ""))
+            lr.unit = unit_by_specimen.get(lr.specimen, "")
             session.add(lr)
+
+    # Backfill existing isolates after the stratification columns are added.
+    # create_all()/ALTER TABLE cannot populate old rows, so derive age and sex
+    # from the linked patient (or a normalised name match) on every startup.
+    unit_by_specimen = {
+        "Urine": "Medical ward",
+        "Blood": "ICU",
+        "Sputum": "ICU",
+        "Wound swab": "Surgical ward",
+    }
+    all_patients = session.exec(select(Patient)).all()
+    patients_by_id = {p.id: p for p in all_patients}
+    patients_by_name = {p.name.strip().lower(): p for p in all_patients}
+    for result in session.exec(select(LabResult)).all():
+        patient = patients_by_id.get(result.patient_id) or patients_by_name.get(
+            (result.patient_name or "").strip().lower()
+        )
+        changed = False
+        if result.age is None and patient and patient.age:
+            result.age = patient.age
+            changed = True
+        if not result.sex and patient and patient.sex:
+            result.sex = patient.sex
+            changed = True
+        if not result.unit and result.specimen in unit_by_specimen:
+            result.unit = unit_by_specimen[result.specimen]
+            changed = True
+        if changed:
+            session.add(result)
 
     # --- ANTIMICROBIAL CONSUMPTION (GLASS-AMC) ---
     # A small demonstrator so the consumption dashboard is useful on first run.

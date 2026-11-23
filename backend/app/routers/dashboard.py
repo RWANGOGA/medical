@@ -11,6 +11,7 @@ from app.models import Antibiotic, Patient, Organism, LabResult, User
 from app.services.antibiogram import aggregate, first_isolates, modal_value, organism_names
 from app.services.auth import get_current_user, get_optional_user
 from app.services.surveillance import quality_indicators
+from app.services.stratification import stratify
 
 router = APIRouter(prefix="/dashboard", tags=["Surveillance Dashboard"])
 
@@ -245,4 +246,24 @@ def get_antibiogram_stats(
             cell["pct_s"] = (
                 round(100 * cell["s"] / cell["n"]) if cell["n"] else 0.0
             )
-    return {"organisms": organisms, "drugs": drugs, "cells": cells}    
+    return {"organisms": organisms, "drugs": drugs, "cells": cells}
+
+
+@router.get("/antibiogram-stratified")
+def get_antibiogram_stratified(
+    hospital: Optional[str] = Query(None),
+    include_duplicates: bool = Query(False, description="Include repeat isolates (not recommended)"),
+    session: Session = Depends(get_session),
+):
+    """Antibiograms split by age, sex, ward and infection origin.
+
+    Grouped percentages let a clinician see, for example, whether a high
+    carbapenem resistance rate is driven by the ICU rather than the whole
+    facility. Small groups are flagged per CLSI M39 and WHO guidance.
+    """
+    lab_results = session.exec(select(LabResult)).all()
+    if hospital:
+        lab_results = [l for l in lab_results if l.hospital == hospital]
+    if not include_duplicates:
+        lab_results = first_isolates(lab_results)
+    return stratify(lab_results, organism_names(session))

@@ -62,6 +62,9 @@ export default function AddLabResultScreen() {
   const [hospital, setHospital] = useState("");
   const [infectionOrigin, setInfectionOrigin] = useState("unknown");
   const [astStandard, setAstStandard] = useState("");
+  const [age, setAge] = useState("");
+  const [sex, setSex] = useState("");
+  const [unit, setUnit] = useState("");
   const [susceptibility, setSusceptibility] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
@@ -105,6 +108,9 @@ export default function AddLabResultScreen() {
         susceptibility,
         infection_origin: infectionOrigin,
         ast_standard: astStandard,
+        age: age.trim() ? Number(age) : undefined,
+        sex,
+        unit,
       });
       invalidateSurveillance();
       const title = saved?.is_first_isolate === false ? "Repeat Isolate Saved" : "Result Saved";
@@ -175,6 +181,42 @@ export default function AddLabResultScreen() {
           <TextInput style={styles.input} value={patientName} onChangeText={setPatientName} placeholder="Patient name" placeholderTextColor={colors.subtext} />
           <TextInput style={[styles.input, { marginTop: 10 }]} value={hospital} onChangeText={setHospital} placeholder="Hospital (defaults to yours)" placeholderTextColor={colors.subtext} />
           <Text style={styles.hint}>A patient name enables the WHO GLASS rule: repeat cultures from the same episode are not counted twice in resistance rates.</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Patient demographics (for stratified surveillance)</Text>
+          <TextInput
+            style={styles.input}
+            value={age}
+            onChangeText={setAge}
+            keyboardType="numeric"
+            placeholder="Age in years (optional)"
+            placeholderTextColor={colors.subtext}
+          />
+          <View style={[styles.chipRow, { marginTop: 10 }]}>
+            {["M", "F", "Other", ""].map((value) => (
+              <TouchableOpacity
+                key={value || "unknown"}
+                style={[styles.chip, sex === value && styles.chipActive]}
+                onPress={() => setSex(value)}
+              >
+                <Text style={[styles.chipText, sex === value && styles.chipTextActive]}>
+                  {value || "Not recorded"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TextInput
+            style={[styles.input, { marginTop: 10 }]}
+            value={unit}
+            onChangeText={setUnit}
+            placeholder="Ward / unit (e.g. ICU, Medical ward)"
+            placeholderTextColor={colors.subtext}
+          />
+          <Text style={styles.hint}>
+            GLASS and EARS-Net report resistance by age, sex and care setting. These values are
+            inherited from the patient record when available.
+          </Text>
         </View>
 
         <View style={styles.section}>
