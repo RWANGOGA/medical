@@ -1,3 +1,4 @@
+from app.core.config import settings
 from sqlmodel import Session, select
 from app.models import Organism, Antibiotic, Patient, TreatmentProtocol, User
 from app.services.auth import hash_password
@@ -178,30 +179,42 @@ def seed_database(session: Session):
     ]
     for pat in patients: session.add(pat)
 
-    # --- DEMO USER ---
-    demo_doctor = User(
-        username="dr.demo",
-        email="demo@stewardamr.org",
-        hashed_password=hash_password("steward123"),
-        full_name="Dr. Sarah Nakato",
-        role="doctor",
-        hospital="Mulago National Referral Hospital",
-        specialization="Infectious Diseases",
-    )
-    session.add(demo_doctor)
-
-    # --- ADMIN USER ---
-    admin_user = User(
-        username="admin",
-        email="admin@stewardamr.org",
-        hashed_password=hash_password("admin123"),
-        full_name="System Administrator",
-        role="admin",
-        hospital="All Hospitals",
-        specialization="System Administration",
-        is_active=True,
-    )
-    session.add(admin_user)
+    # --- DEMO USERS (opt-in only) ---
+    # Default accounts with published passwords are a security hole. Demo users
+    # are created only when SEED_DEMO_USERS=true AND passwords are supplied.
+    if settings.SEED_DEMO_USERS:
+        if settings.SEED_DOCTOR_PASSWORD:
+            session.add(
+                User(
+                    username="dr.demo",
+                    email="demo@stewardamr.org",
+                    hashed_password=hash_password(settings.SEED_DOCTOR_PASSWORD),
+                    full_name="Dr. Sarah Nakato",
+                    role="doctor",
+                    hospital="Mulago National Referral Hospital",
+                    specialization="Infectious Diseases",
+                )
+            )
+            print("Seeded demo doctor 'dr.demo'.")
+        if settings.SEED_ADMIN_PASSWORD:
+            session.add(
+                User(
+                    username="admin",
+                    email="admin@stewardamr.org",
+                    hashed_password=hash_password(settings.SEED_ADMIN_PASSWORD),
+                    full_name="System Administrator",
+                    role="admin",
+                    hospital="All Hospitals",
+                    specialization="System Administration",
+                    is_active=True,
+                )
+            )
+            print("Seeded administrator 'admin'.")
+        if not settings.SEED_DOCTOR_PASSWORD and not settings.SEED_ADMIN_PASSWORD:
+            print(
+                "SEED_DEMO_USERS=true but no SEED_DOCTOR_PASSWORD/SEED_ADMIN_PASSWORD "
+                "was provided; skipping demo users."
+            )
     
     # COMMIT HERE - organisms must be in DB before lab results reference them
     session.commit()

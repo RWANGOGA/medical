@@ -17,4 +17,10 @@ def list_audit_logs(
     current_user: User = Depends(get_current_user),
 ):
     stmt = select(AuditLog).order_by(AuditLog.id.desc()).limit(limit)
+
+    # Clinicians only need their own trail; administrators can audit the whole
+    # system. Patient identifiers in details must not leak across hospitals.
+    if current_user.role != "admin":
+        stmt = stmt.where(AuditLog.user_id == current_user.id)
+
     return session.exec(stmt).all()

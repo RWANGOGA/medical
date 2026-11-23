@@ -10,6 +10,12 @@ from app.services.auth import SECRET_KEY, ALGORITHM, get_current_user
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
+# Bound payloads before they reach the database. Base64 expands bytes by ~4/3.
+MAX_TEXT_CHARS = 5_000
+MAX_AUDIO_CHARS = 7_000_000  # ~5 MB of audio
+MAX_FILE_CHARS = 4_000_000   # ~3 MB document
+MAX_HISTORY_MESSAGES = 200
+
 
 class ConnectionManager:
     def __init__(self):
@@ -63,7 +69,12 @@ manager = ConnectionManager()
 
 @router.get("/messages", response_model=list)
 def get_messages(session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
-    return session.exec(select(ChatMessage).order_by(ChatMessage.id)).all()
+    # Return a bounded, chronological window: chat attachments are stored inline
+    # as base64, so unbounded history would exhaust mobile memory and bandwidth.
+    rows = session.exec(
+        select(ChatMessage).order_by(ChatMessage.id.desc()).limit(MAX_HISTORY_MESSAGES)
+    ).all()
+    return list(reversed(rows))
 
 
 @router.websocket("/ws")
@@ -77,7 +88,7 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(...)):
 
     with Session(engine) as session:
         user = session.get(User, user_id)
-        if not user:
+        if not user or not user.is_active:
             await websocket.close(code=1008)
             return
 
@@ -87,16 +98,20 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(...)):
                 data = await websocket.receive_json()
                 msg_type = data.get("type")
 
-                if msg_type == "send":
-                    await handle_send(data, user, session)
-                elif msg_type == "reaction":
-                    await handle_reaction(data, user, session)
-                elif msg_type == "read":
-                    await handle_read(data, user, session)
-                elif msg_type == "edit":
-                    await handle_edit(data, user, session)
-                elif msg_type == "delete":
-                    await handle_delete(data, user, session)
+                try:
+                    if msg_type == "send":
+                        await handle_send(data, user, session)
+                    elif msg_type == "reaction":
+                        await handle_reaction(data, user, session)
+                    elif msg_type == "read":
+                        await handle_read(data, user, session)
+                    elif msg_type == "edit":
+                        await handle_edit(data, user, session)
+                    elif msg_type == "delete":
+                        await handle_delete(data, user, session)
+                except ValueError as exc:
+                    # Validation failures should not tear down the socket.
+                    await websocket.send_json({"type": "error", "message": str(exc)})
         except WebSocketDisconnect:
             pass
         finally:
@@ -113,6 +128,13 @@ async def handle_send(data: dict, user: User, session: Session):
 
     if not message_text and not audio_data and not file_data:
         return
+
+    if len(message_text) > MAX_TEXT_CHARS:
+        raise ValueError(f"Message is too long (limit {MAX_TEXT_CHARS} characters).")
+    if audio_data and len(audio_data) > MAX_AUDIO_CHARS:
+        raise ValueError("Voice message is too large (limit about 5 MB).")
+    if file_data and len(file_data) > MAX_FILE_CHARS:
+        raise ValueError("Attachment is too large (limit about 3 MB).")
 
     msg = ChatMessage(
         sender_id=user.id,

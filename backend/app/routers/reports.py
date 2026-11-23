@@ -9,7 +9,7 @@ from fastapi.responses import Response
 from sqlmodel import Session, select
 
 from app.db import get_session
-from app.models import Antibiotic, AuditLog, LabResult, Patient
+from app.models import Antibiotic, LabResult, Patient
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
@@ -86,15 +86,12 @@ def monthly_report(hospital: Optional[str] = Query(None), session: Session = Dep
                     w.writerow([f"HIGH RESISTANCE: {org} vs {drug}", f"{r_rate}% R"])
     w.writerow([])
 
-    # Activity log
-    w.writerow(["== RECENT ACTIVITY =="])
-    logs = session.exec(select(AuditLog).order_by(AuditLog.id.desc()).limit(50)).all()
-    for log in logs:
-        w.writerow([log.timestamp, log.username, log.action, log.details])
-
     filename = f"amr-report-{now:%Y-%m-%d-%H%M}.csv"
     return Response(
         content=buf.getvalue(),
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
     )

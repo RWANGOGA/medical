@@ -61,3 +61,24 @@ def test_me_returns_profile(client, auth_headers):
     assert body["username"] == DEMO_DOCTOR["username"]
     assert body["full_name"] == DEMO_DOCTOR["full_name"]
     assert body["hospital"] == DEMO_DOCTOR["hospital"]
+
+
+def test_self_registration_cannot_create_admin(client):
+    """Privilege escalation: a public sign-up must never mint an admin."""
+    res = client.post("/api/v1/auth/register", json={
+        **DEMO_DOCTOR,
+        "username": "sneaky.admin",
+        "email": "sneaky.admin@example.org",
+        "role": "admin",
+    })
+    assert res.status_code == 403
+
+
+def test_self_registration_rejects_unknown_role(client):
+    res = client.post("/api/v1/auth/register", json={
+        **DEMO_DOCTOR,
+        "username": "role.attacker",
+        "email": "role.attacker@example.org",
+        "role": "superuser",
+    })
+    assert res.status_code == 400

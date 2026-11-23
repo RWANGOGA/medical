@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import Session, select
+from sqlmodel import Session, select, or_
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -9,6 +9,38 @@ from app.models import Patient, User
 from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/patients", tags=["Patients"])
+
+
+def _has_patient_access(patient: Patient, current_user: User) -> bool:
+    """Admins see the whole network. Clinicians see their own hospital plus
+    records they personally entered (covers cross-site referrals)."""
+    if current_user.role == "admin":
+        return True
+    if current_user.hospital and patient.hospital == current_user.hospital:
+        return True
+    return bool(current_user.username) and patient.entered_by == current_user.username
+
+
+def _scope_to_hospital(stmt, current_user: User):
+    if current_user.role == "admin":
+        return stmt
+    conditions = []
+    if current_user.hospital:
+        conditions.append(Patient.hospital == current_user.hospital)
+    if current_user.username:
+        conditions.append(Patient.entered_by == current_user.username)
+    if not conditions:
+        # No hospital and no username: never fall back to the whole network.
+        return stmt.where(Patient.id == -1)
+    return stmt.where(or_(*conditions))
+
+
+def _require_patient_access(patient: Patient, current_user: User) -> None:
+    if not _has_patient_access(patient, current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have access to patients from another hospital.",
+        )
 
 
 # ============================================================
@@ -82,8 +114,9 @@ def list_patients(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """List all patients, most recently added first."""
-    return session.exec(select(Patient).order_by(Patient.id.desc())).all()
+    """List patients for the current hospital, most recently added first."""
+    stmt = _scope_to_hospital(select(Patient).order_by(Patient.id.desc()), current_user)
+    return session.exec(stmt).all()
 
 
 @router.get("/{patient_id}", response_model=Patient)
@@ -95,6 +128,7 @@ def get_patient(
     patient = session.get(Patient, patient_id)
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+    _require_patient_access(patient, current_user)
     return patient
 
 
@@ -104,9 +138,10 @@ def create_patient(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    # Use the logged-in doctor's hospital if none provided
+    # Default to the clinician's hospital, but allow an explicit site for
+    # cross-site referrals and retrospective surveillance entry.
     hospital = payload.hospital or current_user.hospital or ""
-    
+
     patient = Patient(
         name=payload.name,
         national_id=payload.national_id or "",
@@ -122,6 +157,7 @@ def create_patient(
         infection_site=payload.infection_site or "",
         culture_results=payload.culture_results or "",
         antibiotic_timeline=payload.antibiotic_timeline,
+        entered_by=current_user.username,
     )
     session.add(patient)
     session.commit()
@@ -139,6 +175,7 @@ def update_patient(
     patient = session.get(Patient, patient_id)
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+    _require_patient_access(patient, current_user)
 
     # Apply only the fields that were provided
     updates = payload.model_dump(exclude_unset=True)
@@ -161,14 +198,20 @@ def check_duplicate(
     if not name:
         return DuplicateCheckResponse(is_duplicate=False, risk_level="none", matches=[])
 
-    # Find candidates by similar name OR same national ID
+    # Find candidates by similar name OR same national ID, within the caller's
+    # hospital unless they are an administrator.
     candidates = list(session.exec(
-        select(Patient).where(Patient.name.ilike(f"%{name}%"))
+        _scope_to_hospital(
+            select(Patient).where(Patient.name.ilike(f"%{name}%")), current_user
+        )
     ).all())
 
     if payload.national_id:
         for p in session.exec(
-            select(Patient).where(Patient.national_id == payload.national_id)
+            _scope_to_hospital(
+                select(Patient).where(Patient.national_id == payload.national_id),
+                current_user,
+            )
         ).all():
             if p.id not in [c.id for c in candidates]:
                 candidates.append(p)
@@ -226,6 +269,7 @@ def delete_patient(
     patient = session.get(Patient, patient_id)
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+    _require_patient_access(patient, current_user)
     session.delete(patient)
     session.commit()
     return {"status": "deleted"}

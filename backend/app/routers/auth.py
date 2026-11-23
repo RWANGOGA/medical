@@ -1,29 +1,37 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlmodel import Session, select
-from pydantic import BaseModel
 
 from app.db import get_session
 from app.models import User
 from app.services.auth import (
-    hash_password, verify_password, create_access_token, get_current_user,
+    create_access_token,
+    get_current_user,
+    hash_password,
+    verify_password,
 )
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
+# Self-service accounts may never create administrators. Admins are provisioned
+# by an existing admin (PUT /admin/users/{id}/role) or during deployment.
+SELF_SERVICE_ROLES = {"doctor", "student", "lab_attendant"}
+
 
 class RegisterRequest(BaseModel):
-    username: str
-    email: str
-    password: str
-    full_name: str
+    username: str = Field(min_length=3, max_length=64)
+    email: str = Field(min_length=5, max_length=254)
+    password: str = Field(min_length=8, max_length=128)
+    full_name: str = Field(min_length=2, max_length=120)
     role: str = "doctor"
-    hospital: str
+    hospital: str = Field(min_length=2, max_length=120)
     specialization: str = ""
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=128)
 
 
 class TokenResponse(BaseModel):
@@ -51,24 +59,39 @@ def _to_response(user: User, token: str) -> TokenResponse:
 
 @router.post("/register", response_model=TokenResponse)
 def register(payload: RegisterRequest, session: Session = Depends(get_session)):
+    username = payload.username.strip()
+    email = payload.email.strip().lower()
+    role = payload.role.strip().lower() or "doctor"
+
+    if role == "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Administrator accounts are provisioned by an existing administrator.",
+        )
+    if role not in SELF_SERVICE_ROLES:
+        raise HTTPException(status_code=400, detail="Invalid role for self-registration.")
+
+    # Case-insensitive duplicate detection (avoids Admin vs admin lookalikes).
     existing = session.exec(
-        select(User).where((User.username == payload.username) | (User.email == payload.email))
+        select(User).where(
+            (func.lower(User.username) == username.lower()) | (User.email == email)
+        )
     ).first()
     if existing:
-        # Clear message so you know it's a duplicate, not a crash
+        # Do not reveal which account matched: that enables user enumeration.
         raise HTTPException(
             status_code=400,
-            detail=f"Username or email already registered (existing user: {existing.username}). Try logging in instead.",
+            detail="Username or email already registered. Try logging in instead.",
         )
 
     user = User(
-        username=payload.username,
-        email=payload.email,
+        username=username,
+        email=email,
         hashed_password=hash_password(payload.password),
-        full_name=payload.full_name,
-        role=payload.role,
-        hospital=payload.hospital,
-        specialization=payload.specialization,
+        full_name=payload.full_name.strip(),
+        role=role,
+        hospital=payload.hospital.strip(),
+        specialization=payload.specialization.strip(),
     )
     session.add(user)
     session.commit()
@@ -80,9 +103,19 @@ def register(payload: RegisterRequest, session: Session = Depends(get_session)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, session: Session = Depends(get_session)):
-    user = session.exec(select(User).where(User.username == payload.username)).first()
+    username = payload.username.strip()
+    user = session.exec(
+        select(User).where(func.lower(User.username) == username.lower())
+    ).first()
+
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect username or password")
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="This account has been suspended. Contact an administrator.",
+        )
 
     token = create_access_token(data={"sub": str(user.id)})
     return _to_response(user, token)

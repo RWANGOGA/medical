@@ -1,4 +1,3 @@
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -8,14 +7,15 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session
 
+from app.core.config import settings
 from app.db import get_session
 from app.models import User
 from app.services.audit import set_audit_user
 
 # Read from environment so the real secret never lives in code/GitHub
-SECRET_KEY = os.getenv("JWT_SECRET", "amr-stewardship-secret-key-change-in-production")
+SECRET_KEY = settings.JWT_SECRET
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days for demo
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # auto_error=False so we control the 401 message cleanly
@@ -60,6 +60,12 @@ async def get_current_user(
     user = session.get(User, user_id)
     if user is None:
         raise credentials_exception
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been suspended. Contact an administrator.",
+        )
 
     # Let the audit trail know WHO is performing the action.
     # Must happen in the request (event-loop) context so sync endpoints

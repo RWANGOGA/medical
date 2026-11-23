@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from pydantic import BaseModel
 from app.db import get_session
-from app.models import TreatmentProtocol, Antibiotic
+from app.models import TreatmentProtocol, Antibiotic, User
+from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/cds", tags=["Clinical Decision Support"])
 
@@ -23,7 +24,11 @@ class CDSResponse(BaseModel):
     reasoning: list[str]
 
 @router.post("/recommend", response_model=CDSResponse)
-def recommend(payload: CDSRequest, session: Session = Depends(get_session)):
+def recommend(
+    payload: CDSRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
     # 1. Fetch the protocol for this organism from the database
     protocol = session.exec(
         select(TreatmentProtocol).where(TreatmentProtocol.organism_id == payload.organism_id)
@@ -52,9 +57,12 @@ def recommend(payload: CDSRequest, session: Session = Depends(get_session)):
                 continue
                 
             # Check Pregnancy against DB tags
-            if payload.pregnant and "fluoroquinolone" in drug.tags:
-                avoid.append(f"{drug.generic_name} (Avoid: Unsafe in pregnancy)")
-                reasoning.append(f"Excluded {drug.generic_name} due to pregnancy (fluoroquinolone contraindicated).")
+            if payload.pregnant and ("fluoroquinolone" in drug.tags or "aminoglycoside" in drug.tags):
+                avoid.append(f"{drug.generic_name} (Avoid: Not preferred in pregnancy)")
+                reasoning.append(
+                    f"Excluded {drug.generic_name}: fluoroquinolones and aminoglycosides "
+                    "carry fetal safety concerns and require an alternative agent."
+                )
                 continue
                 
             target_list.append(drug.generic_name)
@@ -64,7 +72,18 @@ def recommend(payload: CDSRequest, session: Session = Depends(get_session)):
     process_drugs(protocol.reserve, reserve)
 
     if payload.renal_impairment:
-        reasoning.append("Renal impairment noted: dose/interval adjustment required for renally cleared agents.")
+        adjustments = [
+            f"{drug.generic_name}: {drug.renal_adjustment.strip()}"
+            for drug in drugs
+            if (drug.renal_adjustment or "").strip()
+        ]
+        if adjustments:
+            reasoning.append("Renal impairment — apply these dose adjustments:")
+            reasoning.extend(f"- {item}" for item in adjustments)
+        else:
+            reasoning.append(
+                "Renal impairment noted: verify dose and interval for renally cleared agents."
+            )
     if payload.severe:
         reasoning.append("Severe/septic presentation: start broad empirical coverage immediately, then de-escalate.")
 

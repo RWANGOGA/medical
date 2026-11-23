@@ -102,6 +102,8 @@ def suspend_doctor(
         raise HTTPException(status_code=404, detail="Doctor not found")
     if doctor.role == "admin":
         raise HTTPException(status_code=403, detail="Cannot suspend another admin")
+    if doctor.id == admin.id:
+        raise HTTPException(status_code=403, detail="Cannot suspend your own account")
     
     doctor.is_active = False
     session.add(doctor)
@@ -230,7 +232,13 @@ def change_user_role(
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
+    if user.id == admin.id and new_role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="You cannot remove your own administrator role.",
+        )
+
     user.role = new_role
     session.add(user)
     session.commit()

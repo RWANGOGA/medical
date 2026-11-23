@@ -1,14 +1,17 @@
-from fastapi import APIRouter, Depends
-from sqlmodel import Session, select
-from pydantic import BaseModel
-from typing import Dict, Optional
 from datetime import datetime, timezone
+from typing import Dict, Optional
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+from sqlmodel import Session, select, or_
 
 from app.db import get_session
 from app.models import LabResult, Patient, User
+from app.routers.patients import _scope_to_hospital
 from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/lab", tags=["Laboratory"])
+
 
 class LabResultCreate(BaseModel):
     patient_name: str = ""
@@ -20,21 +23,44 @@ class LabResultCreate(BaseModel):
     patient_id: Optional[int] = None
 
 
+def _scope_lab_results(stmt, current_user: User):
+    """Admins see the whole network; clinicians see their hospital and their
+    own entries. Patient names and susceptibility data are not public."""
+    if current_user.role == "admin":
+        return stmt
+    conditions = []
+    if current_user.hospital:
+        conditions.append(LabResult.hospital == current_user.hospital)
+    if current_user.username:
+        conditions.append(LabResult.entered_by == current_user.username)
+    if not conditions:
+        return stmt.where(LabResult.id == -1)
+    return stmt.where(or_(*conditions))
+
+
 @router.post("/results")
 def create_lab_result(
     payload: LabResultCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    # Determine hospital
+    # Default to the caller's hospital, but respect an explicit site.
     hospital = payload.hospital or current_user.hospital or ""
 
-    # Link to existing patient or create a new one if name provided
+    # Link to an existing patient the caller can access, or create one.
     linked_patient_id = payload.patient_id
+    if linked_patient_id:
+        linked = session.get(Patient, linked_patient_id)
+        if linked is None:
+            linked_patient_id = None
     if not linked_patient_id and payload.patient_name:
-        # Try to find existing patient by name (case-insensitive)
         existing = session.exec(
-            select(Patient).where(Patient.name.ilike(payload.patient_name.strip()))
+            _scope_to_hospital(
+                select(Patient).where(
+                    Patient.name.ilike(payload.patient_name.strip())
+                ),
+                current_user,
+            )
         ).first()
         if existing:
             linked_patient_id = existing.id
@@ -57,7 +83,8 @@ def create_lab_result(
         organism_id=payload.organism_id,
         specimen=payload.specimen,
         hospital=hospital,
-        collection_date=payload.collection_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        collection_date=payload.collection_date
+        or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         susceptibility=payload.susceptibility,
         entered_by=current_user.username,
         patient_id=linked_patient_id,
@@ -72,21 +99,25 @@ def create_lab_result(
 def list_lab_results(
     limit: int = 50,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    return session.exec(
-        select(LabResult).order_by(LabResult.id.desc()).limit(limit)
-    ).all()
+    stmt = _scope_lab_results(
+        select(LabResult).order_by(LabResult.id.desc()), current_user
+    ).limit(limit)
+    return session.exec(stmt).all()
 
 
 @router.get("/recent-results")
 def get_recent_results(
     limit: int = 10,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     """Get recent lab results with patient info for the home page."""
-    results = session.exec(
-        select(LabResult).order_by(LabResult.id.desc()).limit(limit)
-    ).all()
+    stmt = _scope_lab_results(
+        select(LabResult).order_by(LabResult.id.desc()), current_user
+    ).limit(limit)
+    results = session.exec(stmt).all()
     return [
         {
             "id": r.id,

@@ -5,25 +5,46 @@ import pytest
 ADMIN_BASE = "/api/v1/admin"
 PUB_BASE = "/api/v1/publications"
 
+ADMIN_USER = {
+    "username": "admin.test",
+    "email": "admin.test@example.org",
+    "password": "adminpass123",
+    "full_name": "Test Admin",
+    "role": "doctor",
+    "hospital": "All Hospitals",
+    "specialization": "Administration",
+}
+
 
 @pytest.fixture(scope="session")
 def admin_headers(client):
-    """Register an admin user and return auth headers."""
-    res = client.post("/api/v1/auth/register", json={
-        "username": "admin.test",
-        "email": "admin.test@example.org",
-        "password": "adminpass123",
-        "full_name": "Test Admin",
-        "role": "admin",
-        "hospital": "All Hospitals",
-        "specialization": "Administration",
-    })
-    # If registration returns existing user, try login
+    """Create a user, promote it to admin in the database, and return headers.
+
+    Self-registration deliberately cannot create administrators, so the role is
+    granted directly (the same way an operator would provision the first admin).
+    """
+    res = client.post("/api/v1/auth/register", json=ADMIN_USER)
     if res.status_code == 400:
         res = client.post("/api/v1/auth/login", json={
-            "username": "admin.test",
-            "password": "adminpass123",
+            "username": ADMIN_USER["username"],
+            "password": ADMIN_USER["password"],
         })
+    assert res.status_code == 200, res.text
+
+    from sqlmodel import Session, select
+
+    from app.db import engine
+    from app.models import User
+
+    with Session(engine) as session:
+        user = session.exec(
+            select(User).where(User.username == ADMIN_USER["username"])
+        ).first()
+        assert user is not None
+        user.role = "admin"
+        session.add(user)
+        session.commit()
+
     token = res.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
@@ -54,16 +75,34 @@ def test_admin_can_list_doctors(client, admin_headers):
     assert isinstance(data["doctors"], list)
 
 
-def test_admin_can_suspend_doctor(client, admin_headers, auth_headers):
-    """Admin can suspend a doctor."""
-    # First get a doctor to suspend
-    res = client.get(f"{ADMIN_BASE}/doctors", headers=admin_headers)
-    doctors = res.json()["doctors"]
-    if doctors:
-        doctor_id = doctors[0]["id"]
-        res = client.put(f"{ADMIN_BASE}/doctors/{doctor_id}/suspend", headers=admin_headers)
-        assert res.status_code == 200
-        assert res.json()["status"] == "suspended"
+def test_admin_can_suspend_doctor(client, admin_headers):
+    """Admin can suspend a doctor, then reactivate the account."""
+    # Register a throw-away doctor so the shared test doctor stays usable.
+    res = client.post("/api/v1/auth/register", json={
+        "username": "suspend.me",
+        "email": "suspend.me@example.org",
+        "password": "suspend-pass-123",
+        "full_name": "Suspendable Doctor",
+        "role": "doctor",
+        "hospital": "Test Hospital",
+    })
+    assert res.status_code == 200, res.text
+    doctor_id = res.json()["user_id"]
+
+    res = client.put(f"{ADMIN_BASE}/doctors/{doctor_id}/suspend", headers=admin_headers)
+    assert res.status_code == 200
+    assert res.json()["status"] == "suspended"
+
+    # A suspended account must not be able to log in.
+    login = client.post("/api/v1/auth/login", json={
+        "username": "suspend.me",
+        "password": "suspend-pass-123",
+    })
+    assert login.status_code == 403
+
+    res = client.put(f"{ADMIN_BASE}/doctors/{doctor_id}/activate", headers=admin_headers)
+    assert res.status_code == 200
+    assert res.json()["status"] == "activated"
 
 
 # --- Publications Tests ---

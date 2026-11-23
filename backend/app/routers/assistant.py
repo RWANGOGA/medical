@@ -1,16 +1,22 @@
+import logging
 import os
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from groq import Groq
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/assistant", tags=["AI Clinical Assistant"])
 
+MAX_MESSAGES = 20
+MAX_MESSAGE_CHARS = 4000
+
 class ChatMessage(BaseModel):
     role: str          # "user" or "assistant"
-    content: str
+    content: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
 
 class ChatRequest(BaseModel):
-    messages: list[ChatMessage]
+    messages: list[ChatMessage] = Field(min_length=1, max_length=MAX_MESSAGES)
 
 class ChatResponse(BaseModel):
     reply: str
@@ -59,5 +65,10 @@ def chat(payload: ChatRequest):
         )
         reply = completion.choices[0].message.content
         return ChatResponse(reply=reply)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Groq service error: {str(e)}")
+    except Exception:
+        # Never surface provider errors (which can include request metadata) to clients.
+        logger.exception("Groq assistant request failed")
+        raise HTTPException(
+            status_code=502,
+            detail="The clinical assistant is temporarily unavailable. Please try again.",
+        )
