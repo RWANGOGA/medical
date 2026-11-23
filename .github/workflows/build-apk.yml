@@ -1,16 +1,36 @@
 name: Build Android APK
 
+# Builds the APK ourselves with Gradle (no EAS account, token or queue).
+# Outputs:
+#   - workflow artifact: medical-android-apk (30 days)
+#   - GitHub Release "apk-latest" (or the pushed v* tag) with the APK attached
+#     stable direct link: https://github.com/<owner>/<repo>/releases/download/apk-latest/medical.apk
+
 on:
   push:
-    branches: [main, master]
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/build-apk.yml'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
 
 jobs:
   build-android-apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'apk-latest' }}
+    defaults:
+      run:
+        working-directory: mobile
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,41 +39,130 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
 
-      - name: Setup EAS
-        uses: expo/expo-github-action@v8
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
         with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+          distribution: temurin
+          java-version: '17'
 
       - name: Install dependencies
-        working-directory: mobile
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
-      - name: Build Android APK
-        working-directory: mobile
-        run: eas build --platform android --profile preview --non-interactive --wait
+      - name: Generate native Android project
+        env:
+          CI: 1
+          EXPO_NO_TELEMETRY: 1
+          EXPO_PUBLIC_API_URL: https://medical-sbit.onrender.com/api/v1
+          EXPO_PUBLIC_WS_URL: wss://medical-sbit.onrender.com/api/v1/chat/ws
+        run: npx expo prebuild --platform android --no-install
 
-      - name: Get latest Android build artifact URL
-        working-directory: mobile
-        id: build-info
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Configure release signing (optional)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          BUILD_JSON=$(eas build:list --json --platform android --limit 1)
-          BUILD_ID=$(echo "$BUILD_JSON" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);console.log(j[0].id)})")
-          ARTIFACT_URL=$(echo "$BUILD_JSON" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);console.log(j[0].artifacts?.[0]?.url||'')})")
-          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
-          echo "artifact_url=$ARTIFACT_URL" >> $GITHUB_OUTPUT
+          # Without secrets the Expo template signs with the debug keystore.
+          # That is installable and fine for internal testing, but not Play-Store ready.
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret set - APK will be debug-signed."
+            exit 0
+          fi
 
-      - name: Download APK artifact
-        if: steps.build-info.outputs.artifact_url != ''
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+
+          python3 - <<'PY'
+          import pathlib
+
+          path = pathlib.Path("android/app/build.gradle")
+          source = path.read_text()
+
+          release_signing = """
+              release {
+                  storeFile file('release.keystore')
+                  storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                  keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                  keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+              }
+          """
+
+          assert "signingConfigs {" in source, "signingConfigs block not found"
+          source = source.replace("signingConfigs {", "signingConfigs {" + release_signing, 1)
+
+          build_types = source.index("buildTypes {")
+          release_block = source.index("release {", build_types)
+          current = "signingConfig signingConfigs.debug"
+          position = source.index(current, release_block)
+          source = (
+              source[:position]
+              + "signingConfig signingConfigs.release"
+              + source[position + len(current):]
+          )
+
+          path.write_text(source)
+          print("Release signing config applied.")
+          PY
+
+      - name: Build release APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          curl -L -o medical.apk ${{ steps.build-info.outputs.artifact_url }}
-          file medical.apk
+          chmod +x android/gradlew
+          # Device ABIs only: emulator-only x86/x86_64 builds are wasted work in CI.
+          (cd android && ./gradlew assembleRelease --no-daemon --stacktrace \
+            -PreactNativeArchitectures=arm64-v8a,armeabi-v7a)
+
+      - name: Collect APK
+        id: apk
+        run: |
+          SOURCE=android/app/build/outputs/apk/release/app-release.apk
+          test -f "$SOURCE" || { echo "APK not found at $SOURCE"; exit 1; }
+
+          VERSION=$(node -p "require('./app.json').expo.version")
+          NAME="medical-${VERSION}-${GITHUB_RUN_NUMBER}.apk"
+
+          mkdir -p dist-apk
+          cp "$SOURCE" "dist-apk/$NAME"
+          cp "$SOURCE" dist-apk/medical.apk
+
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "Built $NAME ($(du -h dist-apk/medical.apk | cut -f1))"
+
+      - name: Check APK is a valid Android package
+        run: |
+          file dist-apk/medical.apk
+          unzip -l dist-apk/medical.apk | grep -q "AndroidManifest.xml"
 
       - name: Upload APK artifact
-        if: steps.build-info.outputs.artifact_url != ''
         uses: actions/upload-artifact@v4
         with:
           name: medical-android-apk
-          path: medical.apk
+          path: mobile/dist-apk/medical.apk
           retention-days: 30
+          if-no-files-found: error
+
+      - name: Publish APK release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Medical APK {0}', github.ref_name) || 'Medical APK (latest)' }}
+          body: |
+            Automatically built Android APK.
+
+            - Version: `${{ steps.apk.outputs.name }}`
+            - Commit: `${{ github.sha }}`
+            - Built by: GitHub Actions run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            Direct download: `${{ github.server_url }}/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/medical.apk`
+          files: mobile/dist-apk/medical.apk
+          make_latest: true
+          fail_on_unmatched_files: true

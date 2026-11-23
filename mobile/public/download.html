@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Download the Android app — Medical</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f5f9ff;
+        --card: #ffffff;
+        --text: #0f172a;
+        --muted: #5b6b82;
+        --brand: #0284c7;
+        --brand-dark: #0369a1;
+        --border: #e2e8f0;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b1220;
+          --card: #111a2c;
+          --text: #e6edf7;
+          --muted: #94a3b8;
+          --border: #1e2a41;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      main {
+        width: min(520px, 100%);
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 32px;
+        box-shadow: 0 18px 50px rgba(2, 132, 199, 0.12);
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--brand);
+        background: rgba(2, 132, 199, 0.1);
+        border-radius: 999px;
+        padding: 6px 12px;
+      }
+      h1 { font-size: 26px; line-height: 1.25; margin: 18px 0 8px; }
+      p { color: var(--muted); line-height: 1.6; margin: 0 0 16px; font-size: 15px; }
+      .actions { display: grid; gap: 10px; margin: 22px 0 18px; }
+      a.button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 15px;
+        padding: 14px 18px;
+        border-radius: 12px;
+        transition: transform 0.12s ease, background 0.12s ease;
+      }
+      a.primary { background: var(--brand); color: #fff; }
+      a.primary:hover { background: var(--brand-dark); transform: translateY(-1px); }
+      a.secondary {
+        color: var(--text);
+        border: 1px solid var(--border);
+        background: transparent;
+      }
+      a.secondary:hover { border-color: var(--brand); color: var(--brand); }
+      ul { margin: 0; padding-left: 20px; color: var(--muted); font-size: 14px; line-height: 1.7; }
+      footer { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 13px; }
+      footer a { color: var(--brand); text-decoration: none; }
+      code {
+        background: rgba(127, 127, 127, 0.12);
+        padding: 2px 6px;
+        border-radius: 6px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <span class="badge">Android · APK</span>
+      <h1>Install the Medical app</h1>
+      <p>
+        The APK is built automatically on every release and is signed for direct installation.
+        If you are on a computer, open this page on your phone to download it there.
+      </p>
+
+      <div class="actions">
+        <a
+          class="button primary"
+          href="https://github.com/RWANGOGA/medical/releases/download/apk-latest/medical.apk"
+        >
+          ⬇ Download latest APK
+        </a>
+        <a
+          class="button secondary"
+          href="https://github.com/RWANGOGA/medical/releases/tag/apk-latest"
+        >
+          Release notes &amp; older builds
+        </a>
+      </div>
+
+      <p style="margin-bottom: 6px"><strong>Before installing</strong></p>
+      <ul>
+        <li>Android may ask you to allow installing from an unknown source — enable it for your browser.</li>
+        <li>If an older version is installed, uninstall it first when the signature differs.</li>
+        <li>Prefer the web app? <a href="./">Open the web version</a>.</li>
+      </ul>
+
+      <p id="auto-status" hidden style="color: var(--brand); font-weight: 600">
+        Starting your download…
+      </p>
+
+      <footer>
+        Debug-signed internal builds unless a release keystore is configured.
+        Asset: <code>medical.apk</code> on the <code>apk-latest</code> release tag.
+      </footer>
+    </main>
+
+    <script>
+      (function () {
+        var APK =
+          "https://github.com/RWANGOGA/medical/releases/download/apk-latest/medical.apk";
+        var isAndroid = /android/i.test(navigator.userAgent || "");
+        if (!isAndroid) return;
+
+        var status = document.getElementById("auto-status");
+        if (status) status.hidden = false;
+
+        // Opening this page on Android should start the APK download by itself.
+        // The button above remains as a fallback for browsers that block it.
+        window.setTimeout(function () {
+          window.location.href = APK;
+        }, 700);
+      })();
+    </script>
+  </body>
+</html>

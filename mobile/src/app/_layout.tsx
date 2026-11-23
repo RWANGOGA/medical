@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "../context/AuthContext";
 import { AssistantProvider } from "../context/AssistantContext";
 import { ThemeProvider, useTheme } from "../context/ThemeContext";
 import { ApiError } from "../services/api";
+import { DownloadAppPrompt } from "../components/download-app-prompt";
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -42,7 +43,12 @@ function AppContent() {
     );
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <>
+      <Stack screenOptions={{ headerShown: false }} />
+      <DownloadAppPrompt />
+    </>
+  );
 }
 
 export default function RootLayout() {

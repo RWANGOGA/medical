@@ -1,11 +1,12 @@
 import { useEffect, useMemo } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Platform, Linking } from "react-native";
 import { useRouter } from "expo-router";
 import { Palette } from "../../constants/branding";
 import { useTheme, ThemeMode } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../context/AuthContext";
 import { Screen } from "../../components/screen";
+import { APK_DOWNLOAD_URL } from "../../constants/downloads";
 
 const MODES: { value: ThemeMode; label: string }[] = [
   { value: "system", label: "System" },
@@ -82,6 +83,18 @@ export default function ProfileScreen() {
           <Ionicons name="lock-closed" size={20} color={colors.primary} />
           <Text style={styles.menuText}>Session authentication: Active</Text>
         </View>
+        {Platform.OS === "web" && (
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => Linking.openURL(APK_DOWNLOAD_URL)}
+            accessibilityRole="button"
+            accessibilityLabel="Download the Android app"
+          >
+            <Ionicons name="download-outline" size={20} color={colors.access} />
+            <Text style={styles.menuText}>Download Android app (APK)</Text>
+            <Ionicons name="open-outline" size={16} color={colors.subtext} />
+          </TouchableOpacity>
+        )}
         <View style={[styles.menuItem, { borderBottomWidth: 0 }]}>
           <Ionicons name="document-text" size={20} color={colors.watch} />
           <Text style={styles.menuText}>Audit trail: Enabled</Text>

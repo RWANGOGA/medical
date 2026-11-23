@@ -1,8 +1,14 @@
 name: Deploy Web to GitHub Pages
 
+# This is the only workflow allowed to publish the Pages site.
+# The APK itself lives in GitHub Releases (binary distribution); Pages only links to it.
+
 on:
   push:
-    branches: [main, master]
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
 
 permissions:
@@ -17,6 +23,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,13 +34,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
 
       - name: Install dependencies
-        working-directory: mobile
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Export web build
-        working-directory: mobile
         env:
           CI: 1
           EXPO_NO_TELEMETRY: 1
@@ -40,7 +49,6 @@ jobs:
         run: npx expo export --platform web --output-dir dist
 
       - name: SPA fallback & prevent Jekyll
-        working-directory: mobile
         run: |
           cp dist/index.html dist/404.html
           touch dist/.nojekyll
