@@ -38,7 +38,7 @@ PREFERRED_DRUGS = [
     "Ceftriaxone",
     "Ceftazidime",
     "Cefepime",
-    "Pip-Tazo",
+    "Piperacillin-tazobactam",
     "Meropenem",
     "Vancomycin",
     "Linezolid",
@@ -53,6 +53,33 @@ PREFERRED_DRUGS = [
     "Colistin",
     "Fosfomycin",
 ]
+
+
+# Different facilities write the same drug in different ways. Merge the common
+# aliases so one agent is not split into two columns of the antibiogram.
+DRUG_ALIASES = {
+    "pip-tazo": "Piperacillin-tazobactam",
+    "pip/tazo": "Piperacillin-tazobactam",
+    "piperacillin/tazobactam": "Piperacillin-tazobactam",
+    "tazobactam-piperacillin": "Piperacillin-tazobactam",
+    "co-amoxiclav": "Amoxicillin-Clavulanate",
+    "amox-clav": "Amoxicillin-Clavulanate",
+    "augmentin": "Amoxicillin-Clavulanate",
+    "tmp-smx": "Co-trimoxazole",
+    "cotrimoxazole": "Co-trimoxazole",
+    "bactrim": "Co-trimoxazole",
+    "septra": "Co-trimoxazole",
+}
+
+
+def normalise_drug(name: str) -> str:
+    cleaned = (name or "").strip()
+    return DRUG_ALIASES.get(cleaned.lower(), cleaned)
+
+
+def first_isolates(results: Iterable[LabResult]) -> list[LabResult]:
+    """Apply the GLASS first-isolate rule before computing percentages."""
+    return [r for r in results if getattr(r, "is_first_isolate", True)]
 
 
 def organism_name(organism_id: str, names: dict[str, str]) -> str:
@@ -79,7 +106,7 @@ def aggregate(
         organism = organism_name(result.organism_id, names)
         for drug, interpretation in (result.susceptibility or {}).items():
             if interpretation in {"S", "I", "R"}:
-                values[organism][drug].append(interpretation)
+                values[organism][normalise_drug(drug)].append(interpretation)
 
     organisms = sorted(values)
     present = {drug for organism in organisms for drug in values[organism]}

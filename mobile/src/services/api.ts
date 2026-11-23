@@ -106,6 +106,8 @@ export const api = {
   // Public endpoints (no auth)
   getOrganismsPublic: () => request<any[]>("/dashboard/organisms-public"),
   getAntibioticsPublic: () => request<any[]>("/dashboard/antibiotics-public"),
+  getSurveillanceQuality: (hospital?: string) =>
+    request<any>(`/dashboard/surveillance-quality${hospital ? `?hospital=${encodeURIComponent(hospital)}` : ""}`),
   getGuidelinesPublic: () => request<any[]>("/dashboard/guidelines-public"),
   getMechanisms: () => request<any>("/dashboard/mechanisms"),
 

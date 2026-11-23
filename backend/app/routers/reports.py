@@ -12,8 +12,9 @@ from app.db import get_session
 from app.models import Antibiotic, LabResult, Patient, User
 from app.routers.lab import _scope_lab_results
 from app.routers.patients import _scope_to_hospital
-from app.services.antibiogram import aggregate, modal_value, organism_names
+from app.services.antibiogram import aggregate, first_isolates, modal_value, organism_names
 from app.services.auth import get_current_user
+from app.services.surveillance import quality_indicators
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
@@ -59,8 +60,12 @@ def monthly_report(
 
     # Workload
     w.writerow(["== WORKLOAD =="])
+    indicators = quality_indicators(labs)
+    first_labs = first_isolates(labs)
     w.writerow(["Total patients", len(patients)])
     w.writerow(["Total lab results", len(labs)])
+    w.writerow(["First isolates counted", indicators["first_isolates"]])
+    w.writerow(["Repeat isolates excluded (GLASS)", indicators["duplicate_isolates"]])
     by_hosp = defaultdict(int)
     for p in patients:
         by_hosp[p.hospital or "Unknown"] += 1
@@ -68,9 +73,22 @@ def monthly_report(
         w.writerow([f"Patients - {h}", by_hosp[h]])
     w.writerow([])
 
-    # Antibiogram
-    w.writerow(["== ANTIBIOGRAM (S/I/R) =="])
-    organisms, drugs, values = aggregate(labs, organism_names(session))
+    # Data quality (WHO GLASS / WHONET)
+    w.writerow(["== SURVEILLANCE DATA QUALITY (WHO GLASS) =="])
+    for label, key in (
+        ("Isolates with a patient identity", "identified_pct"),
+        ("Isolates with infection origin", "origin_known_pct"),
+        ("Isolates with AST breakpoint standard", "ast_standard_pct"),
+        ("Invasive isolates (blood/CSF)", "invasive_pct"),
+        ("Isolates with an S/I/R result", "sir_pct"),
+    ):
+        w.writerow([f"{label} (%)", indicators[key]])
+    w.writerow(["First-isolate window (days)", indicators["dedup_window_days"]])
+    w.writerow([])
+
+    # Antibiogram — first isolates only, so repeat cultures cannot skew %S.
+    w.writerow(["== ANTIBIOGRAM (S/I/R, first isolates) =="])
+    organisms, drugs, values = aggregate(first_labs, organism_names(session))
 
     w.writerow(["Organism"] + drugs)
     for organism in organisms:

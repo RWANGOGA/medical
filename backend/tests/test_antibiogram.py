@@ -38,6 +38,31 @@ def test_antibiogram_grid_uses_the_same_dynamic_panel(client, auth_headers):
     assert body["grid"][organism_index][drug_index] == "S"
 
 
+def test_drug_aliases_merge_into_one_antibiogram_column(client, auth_headers):
+    import uuid
+
+    for drug, value in (("Pip-Tazo", "S"), ("Piperacillin-tazobactam", "R")):
+        res = client.post(
+            "/api/v1/lab/results",
+            json={
+                "patient_name": f"Alias Patient {uuid.uuid4().hex[:8]}",
+                "organism_id": "ecoli",
+                "specimen": "Urine",
+                "hospital": "Test Hospital",
+                "susceptibility": {drug: value},
+            },
+            headers=auth_headers,
+        )
+        assert res.status_code == 200, res.text
+
+    body = client.get("/api/v1/dashboard/antibiogram-stats").json()
+    columns = [d for d in body["drugs"] if "pip" in d.lower()]
+    assert len(columns) == 1
+    cell = body["cells"]["E. coli"][columns[0]]
+    assert cell["n"] >= 2
+    assert columns[0] == "Piperacillin-tazobactam"
+
+
 def test_monthly_report_includes_new_organisms(client, auth_headers):
     _record_isolate(client, auth_headers)
 

@@ -11,8 +11,17 @@ import { Palette } from "../constants/branding";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 
-const DRUGS = ["Ampicillin", "Ceftriaxone", "Pip-Tazo", "Meropenem", "Vancomycin"];
 const SIR = ["S", "I", "R"];
+
+// Shown only if the reference list cannot be loaded.
+const FALLBACK_DRUGS = ["Ampicillin", "Ceftriaxone", "Piperacillin-tazobactam", "Meropenem", "Vancomycin"];
+
+const ORIGINS = [
+  { value: "community", label: "Community" },
+  { value: "hospital-onset", label: "Hospital-onset" },
+  { value: "healthcare-associated", label: "Healthcare-associated" },
+  { value: "unknown", label: "Not recorded" },
+];
 
 export default function AddLabResultScreen() {
   const router = useRouter();
@@ -34,11 +43,25 @@ export default function AddLabResultScreen() {
     queryFn: api.getOrganismsPublic,
     enabled: isAuthenticated,
   });
+  const { data: antibiotics } = useQuery({
+    queryKey: ["antibiotics-public"],
+    queryFn: api.getAntibioticsPublic,
+    enabled: isAuthenticated,
+  });
+
+  const drugs = useMemo(() => {
+    const names = (antibiotics || [])
+      .map((a: any) => a.generic_name)
+      .filter((name: any) => typeof name === "string" && name.trim());
+    return names.length ? names : FALLBACK_DRUGS;
+  }, [antibiotics]);
 
   const [organismId, setOrganismId] = useState("ecoli");
   const [specimen, setSpecimen] = useState("Urine");
   const [patientName, setPatientName] = useState("");
   const [hospital, setHospital] = useState("");
+  const [infectionOrigin, setInfectionOrigin] = useState("unknown");
+  const [astStandard, setAstStandard] = useState("");
   const [susceptibility, setSusceptibility] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
@@ -52,31 +75,44 @@ export default function AddLabResultScreen() {
   const sirColor = (val: string) =>
     val === "S" ? colors.access : val === "I" ? colors.watch : colors.reserve;
 
+  const invalidateSurveillance = () => {
+    queryClient.invalidateQueries({ queryKey: ["antibiogram"] });
+    queryClient.invalidateQueries({ queryKey: ["abx-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["surveillance-quality"] });
+    queryClient.invalidateQueries({ queryKey: ["labresults"] });
+    queryClient.invalidateQueries({ queryKey: ["lab-results"] });
+    queryClient.invalidateQueries({ queryKey: ["patients"] });
+    queryClient.invalidateQueries({ queryKey: ["recent-lab-results"] });
+  };
+
   const handleSubmit = async () => {
     const filled = Object.values(susceptibility).filter(Boolean);
     if (filled.length === 0) {
       Alert.alert("Missing Data", "Select at least one S/I/R result.");
       return;
     }
+    if (!organismId) {
+      Alert.alert("Missing Data", "Select the organism that was isolated.");
+      return;
+    }
     setLoading(true);
     try {
-      await api.addLabResult({
+      const saved: any = await api.addLabResult({
         patient_name: patientName,
         organism_id: organismId,
         specimen,
         hospital: hospital || user?.hospital || "",
         susceptibility,
+        infection_origin: infectionOrigin,
+        ast_standard: astStandard,
       });
-      // Refresh the antibiogram so the dashboard updates immediately
-      // Also invalidate patients and lab results so recent patients updates
-      queryClient.invalidateQueries({ queryKey: ["antibiogram"] });
-      queryClient.invalidateQueries({ queryKey: ["labresults"] });
-      queryClient.invalidateQueries({ queryKey: ["lab-results"] });
-      queryClient.invalidateQueries({ queryKey: ["patients"] });
-      queryClient.invalidateQueries({ queryKey: ["recent-lab-results"] });
-      Alert.alert("Result Saved", "The antibiogram has been updated.", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      invalidateSurveillance();
+      const title = saved?.is_first_isolate === false ? "Repeat Isolate Saved" : "Result Saved";
+      const message =
+        saved?.is_first_isolate === false
+          ? "This repeat isolate is kept for the patient record but excluded from resistance percentages (WHO GLASS first-isolate rule)."
+          : "The antibiogram has been updated.";
+      Alert.alert(title, message, [{ text: "OK", onPress: () => router.back() }]);
     } catch (e: any) {
       Alert.alert("Error", e.message || "Failed to save lab result.");
     } finally {
@@ -121,7 +157,7 @@ export default function AddLabResultScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Specimen</Text>
           <View style={styles.chipRow}>
-            {["Urine", "Blood", "Sputum", "Wound swab"].map((s) => (
+            {["Urine", "Blood", "Sputum", "Cerebrospinal fluid", "Wound swab"].map((s) => (
               <TouchableOpacity
                 key={s}
                 style={[styles.chip, specimen === s && styles.chipActive]}
@@ -131,17 +167,48 @@ export default function AddLabResultScreen() {
               </TouchableOpacity>
             ))}
           </View>
+          <Text style={styles.hint}>Blood and CSF are invasive specimens and drive the headline surveillance indicators.</Text>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Patient (optional)</Text>
           <TextInput style={styles.input} value={patientName} onChangeText={setPatientName} placeholder="Patient name" placeholderTextColor={colors.subtext} />
           <TextInput style={[styles.input, { marginTop: 10 }]} value={hospital} onChangeText={setHospital} placeholder="Hospital (defaults to yours)" placeholderTextColor={colors.subtext} />
+          <Text style={styles.hint}>A patient name enables the WHO GLASS rule: repeat cultures from the same episode are not counted twice in resistance rates.</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Infection origin</Text>
+          <View style={styles.chipRow}>
+            {ORIGINS.map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                style={[styles.chip, infectionOrigin === option.value && styles.chipActive]}
+                onPress={() => setInfectionOrigin(option.value)}
+              >
+                <Text style={[styles.chipText, infectionOrigin === option.value && styles.chipTextActive]}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>AST breakpoint standard</Text>
+          <TextInput
+            style={styles.input}
+            value={astStandard}
+            onChangeText={setAstStandard}
+            placeholder="e.g. EUCAST 2025 or CLSI M100 Ed34"
+            placeholderTextColor={colors.subtext}
+          />
+          <Text style={styles.hint}>S/I/R depends on the breakpoint standard in use; record it for comparable surveillance.</Text>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Susceptibility (S / I / R)</Text>
-          {DRUGS.map((drug) => (
+          {drugs.map((drug: string) => (
             <View key={drug} style={styles.sirRow}>
               <Text style={styles.sirDrug}>{drug}</Text>
               <View style={styles.sirButtons}>
@@ -167,7 +234,7 @@ export default function AddLabResultScreen() {
               </View>
             </View>
           ))}
-          <Text style={styles.hint}>Tap a letter to set it; tap again to clear.</Text>
+          <Text style={styles.hint}>Tap a letter to set it; tap again to clear. Leave untested drugs blank.</Text>
         </View>
 
         <TouchableOpacity
@@ -230,7 +297,7 @@ function makeStyles(c: Palette) {
       alignItems: "center",
     },
     sirBtnText: { fontSize: 16, fontWeight: "700", color: c.subtext },
-    hint: { fontSize: 12, color: c.subtext, marginTop: 4, fontStyle: "italic" },
+    hint: { fontSize: 12, color: c.subtext, marginTop: 6, lineHeight: 17 },
     submitBtn: {
       backgroundColor: c.primary,
       paddingVertical: 18,

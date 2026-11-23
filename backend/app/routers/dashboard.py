@@ -8,8 +8,9 @@ import re
 
 from app.db import get_session
 from app.models import Antibiotic, Patient, Organism, LabResult, User
-from app.services.antibiogram import aggregate, modal_value, organism_names
+from app.services.antibiogram import aggregate, first_isolates, modal_value, organism_names
 from app.services.auth import get_current_user, get_optional_user
+from app.services.surveillance import quality_indicators
 
 router = APIRouter(prefix="/dashboard", tags=["Surveillance Dashboard"])
 
@@ -132,15 +133,22 @@ def get_trends(hospital: Optional[str] = Query(None), session: Session = Depends
 
 
 @router.get("/antibiogram", response_model=AntibiogramData)
-def get_antibiogram(hospital: Optional[str] = Query(None), session: Session = Depends(get_session)):
+def get_antibiogram(
+    hospital: Optional[str] = Query(None),
+    include_duplicates: bool = Query(False, description="Include repeat isolates (not recommended)"),
+    session: Session = Depends(get_session),
+):
     """Live antibiogram aggregated from lab results.
 
-    The organism and drug panels are derived from the data so new priority
-    pathogens appear without a code change.
+    Only the first isolate of each patient/pathogen/specimen episode is counted
+    by default (WHO GLASS). The organism and drug panels are derived from the
+    data so new priority pathogens appear without a code change.
     """
     lab_results = session.exec(select(LabResult)).all()
     if hospital:
         lab_results = [l for l in lab_results if l.hospital == hospital]
+    if not include_duplicates:
+        lab_results = first_isolates(lab_results)
 
     organisms, drugs, values = aggregate(lab_results, organism_names(session))
     grid = [
@@ -148,6 +156,18 @@ def get_antibiogram(hospital: Optional[str] = Query(None), session: Session = De
         for organism in organisms
     ]
     return AntibiogramData(organisms=organisms, drugs=drugs, grid=grid)
+
+
+@router.get("/surveillance-quality")
+def get_surveillance_quality(
+    hospital: Optional[str] = Query(None),
+    session: Session = Depends(get_session),
+):
+    """GLASS/WHONET-style data-quality indicators (counts only, no patient data)."""
+    lab_results = session.exec(select(LabResult)).all()
+    if hospital:
+        lab_results = [l for l in lab_results if l.hospital == hospital]
+    return quality_indicators(lab_results)
 
 
 # --- PUBLIC ENDPOINTS ---
@@ -191,11 +211,21 @@ def get_mechanisms():
 
 
 @router.get("/antibiogram-stats")
-def get_antibiogram_stats(hospital: Optional[str] = Query(None), session: Session = Depends(get_session)):
-    """Detailed antibiogram: S/I/R counts, isolate numbers and %S per cell."""
+def get_antibiogram_stats(
+    hospital: Optional[str] = Query(None),
+    include_duplicates: bool = Query(False, description="Include repeat isolates (not recommended)"),
+    session: Session = Depends(get_session),
+):
+    """Detailed antibiogram: S/I/R counts, isolate numbers and %S per cell.
+
+    Repeat isolates are excluded by default so one persistent infection cannot
+    dominate a susceptibility percentage.
+    """
     lab_results = session.exec(select(LabResult)).all()
     if hospital:
         lab_results = [l for l in lab_results if l.hospital == hospital]
+    if not include_duplicates:
+        lab_results = first_isolates(lab_results)
 
     organisms, drugs, values = aggregate(lab_results, organism_names(session))
     cells = {

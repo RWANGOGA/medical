@@ -20,6 +20,35 @@ const WHO: Record<string, string> = {
   "S. aureus": "HIGH",
 };
 
+function QualityCard({ quality, loading, colors, styles }: any) {
+  if (loading) return <ActivityIndicator color={colors.primary} />;
+  if (!quality) return null;
+  const items = [
+    { label: "First isolates", value: `${quality.first_isolates}/${quality.total_isolates}` },
+    { label: "Repeat isolates", value: `${quality.duplicate_pct}%` },
+    { label: "Patient identity", value: `${quality.identified_pct}%` },
+    { label: "Infection origin", value: `${quality.origin_known_pct}%` },
+    { label: "AST standard", value: `${quality.ast_standard_pct}%` },
+    { label: "Invasive (blood/CSF)", value: `${quality.invasive_pct}%` },
+  ];
+  return (
+    <View>
+      <View style={styles.qualityGrid}>
+        {items.map((item) => (
+          <View key={item.label} style={styles.qualityItem}>
+            <Text style={[styles.qualityValue, { color: colors.text }]}>{item.value}</Text>
+            <Text style={[styles.qualityLabel, { color: colors.subtext }]}>{item.label}</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={styles.footnote}>
+        {quality.method}. Repeat cultures from the same episode are excluded from the
+        antibiogram below.
+      </Text>
+    </View>
+  );
+}
+
 function LineChart({ years, series, W, colors }: any) {
   const IW = W - L - R, IH = H - T - B;
   const y = (v: number) => T + IH - (v / MAX) * IH;
@@ -172,6 +201,7 @@ export default function ResistanceScreen() {
   const { data: trends, isLoading: lt } = useQuery({ queryKey: ["trends", hospital], queryFn: () => api.getDashboardTrends(active) });
   const { data: organisms, isLoading: lo } = useQuery({ queryKey: ["organisms"], queryFn: api.getOrganisms });
   const { data: stats, isLoading: la } = useQuery({ queryKey: ["abx-stats", hospital], queryFn: () => api.getAntibiogramStats(active) });
+  const { data: quality, isLoading: lq } = useQuery({ queryKey: ["surveillance-quality", hospital], queryFn: () => api.getSurveillanceQuality(active) });
 
   const whoColor = (p: string) => (p === "CRITICAL" ? colors.reserve : colors.watch);
   const getSirColor = (val: string) => (val === "S" ? colors.access : val === "I" ? colors.watch : val === "R" ? colors.reserve : colors.subtext);
@@ -207,6 +237,11 @@ export default function ResistanceScreen() {
       </ScrollView>
 
       <View style={styles.contentColumn}>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Surveillance data quality (WHO GLASS)</Text>
+          <QualityCard quality={quality} loading={lq} colors={colors} styles={styles} />
+        </View>
+
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Resistance trends over time (%)</Text>
           {lt ? <ActivityIndicator color={colors.primary} /> : (
@@ -306,7 +341,11 @@ function makeStyles(c: Palette) {
     heatCell: { flex: 1, minWidth: 44, height: 42, justifyContent: "center", alignItems: "center", borderRadius: 8, marginHorizontal: 2 },
     heatCellText: { fontSize: 14, fontWeight: "800" },
     heatN: { fontSize: 8, color: c.subtext },
-    footnote: { fontSize: 10, color: c.subtext, marginTop: 8 },
+    footnote: { fontSize: 10, color: c.subtext, marginTop: 8, lineHeight: 15 },
+    qualityGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 8 },
+    qualityItem: { minWidth: 92, flex: 1, backgroundColor: c.background, borderRadius: 10, padding: 10, alignItems: "center" },
+    qualityValue: { fontSize: 16, fontWeight: "800" },
+    qualityLabel: { fontSize: 10, textAlign: "center", marginTop: 2 },
     empRow: { marginBottom: 12 },
     empDrug: { fontSize: 13, fontWeight: "700", color: c.text },
     empPct: { fontSize: 12, fontWeight: "800" },

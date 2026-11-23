@@ -3,6 +3,7 @@ from sqlmodel import Session, select
 from app.models import Organism, Antibiotic, Patient, TreatmentProtocol, User
 from app.services.auth import hash_password
 from app.models import Antibiotic, Patient, Organism, LabResult
+from app.services.surveillance import patient_key
 from app.data.global_amr import (
     ANTIBIOTICS as GLOBAL_ANTIBIOTICS,
     ORGANISMS as GLOBAL_ORGANISMS,
@@ -302,7 +303,16 @@ def seed_database(session: Session):
                   susceptibility={"Vancomycin": "S", "Ceftriaxone": "S"}),
     ]
     if not session.exec(select(LabResult)).first():
+        origin_by_specimen = {
+            "Urine": "community",
+            "Blood": "hospital-onset",
+            "Sputum": "healthcare-associated",
+            "Wound swab": "community",
+        }
         for lr in lab_results:
+            lr.infection_origin = origin_by_specimen.get(lr.specimen, "unknown")
+            lr.ast_standard = "EUCAST 2025"
+            lr.patient_key = patient_key(None, lr.patient_name, lr.hospital)
             session.add(lr)
 
     session.commit()

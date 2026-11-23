@@ -99,7 +99,17 @@ class LabResult(SQLModel, table=True):
     collection_date: str = ""
     susceptibility: dict = Field(default_factory=dict, sa_column=Column(JSON))
     entered_by: str = ""
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())  
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    # WHO GLASS surveillance metadata. patient_key is a normalised identity
+    # used only for duplicate detection; it is never returned to clients as a
+    # patient identifier. Existing rows default to "first isolate" so historic
+    # antibiograms are not emptied by the upgrade.
+    patient_key: str = Field(default="", index=True)
+    is_first_isolate: bool = True
+    duplicate_of: Optional[int] = None
+    infection_origin: str = "unknown"
+    ast_standard: str = ""  
 
 class ChatMessage(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
