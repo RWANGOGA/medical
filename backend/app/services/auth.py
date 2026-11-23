@@ -72,3 +72,31 @@ async def get_current_user(
     # running in threadpool workers inherit it via their copied context.
     set_audit_user(user)
     return user
+
+
+async def get_optional_user(
+    token: Optional[str] = Depends(oauth2_scheme),
+    session: Session = Depends(get_session),
+) -> Optional[User]:
+    """Identify the caller when a token is present, but never reject them.
+
+    Used by endpoints that serve both the public surveillance view and the
+    signed-in view (for example, the hospital filter).
+    """
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        sub = payload.get("sub")
+        if sub is None:
+            return None
+        user_id = int(sub)
+    except (JWTError, ValueError):
+        return None
+
+    user = session.get(User, user_id)
+    if user is None or not user.is_active:
+        return None
+
+    set_audit_user(user)
+    return user

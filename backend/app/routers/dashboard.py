@@ -8,7 +8,7 @@ import re
 
 from app.db import get_session
 from app.models import Antibiotic, Patient, Organism, LabResult, User
-from app.services.auth import get_current_user
+from app.services.auth import get_current_user, get_optional_user
 
 router = APIRouter(prefix="/dashboard", tags=["Surveillance Dashboard"])
 
@@ -35,16 +35,15 @@ class AwReSummary(BaseModel):
 def get_hospitals(
     filter_by_doctor: bool = Query(False, description="Filter hospitals to only the current user's hospital"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Distinct hospitals for the multi-hospital filter.
 
-    If filter_by_doctor=true, returns only the current user's hospital.
-    Otherwise returns all hospitals in the system.
+    Hospital names are public surveillance metadata, so the list works without
+    signing in. Asking for only the caller's hospital requires a token.
     """
-    # If filtering by doctor, return only their hospital
-    if filter_by_doctor and current_user.hospital:
-        return [current_user.hospital]
+    if filter_by_doctor:
+        return [current_user.hospital] if current_user and current_user.hospital else []
 
     hospitals = set()
     for p in session.exec(select(Patient)).all():

@@ -90,6 +90,12 @@ def test_cds_requires_authentication(client):
     assert res.status_code == 401
 
 
+def test_public_hospital_filter_does_not_leak_doctor_scope(client):
+    res = client.get("/api/v1/dashboard/hospitals?filter_by_doctor=true")
+    assert res.status_code == 200
+    assert res.json() == []
+
+
 def test_audit_logs_scoped_to_current_user(client, auth_headers, admin_headers):
     # The admin performs an audited action, then a clinician must not see it.
     client.post("/api/v1/patients/", json={

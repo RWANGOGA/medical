@@ -56,10 +56,11 @@ def _create_lab_result(client, auth_headers, payload):
 
 # --- Authentication ---
 
-def test_hospitals_requires_auth(client):
-    """Hospital endpoints require authentication."""
+def test_hospitals_public(client):
+    """Hospital names are public surveillance metadata."""
     res = client.get(f"{BASE}/hospitals")
-    assert res.status_code == 401
+    assert res.status_code == 200
+    assert isinstance(res.json(), list)
 
 
 def test_doctor_hospital_requires_auth(client):
