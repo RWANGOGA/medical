@@ -108,6 +108,22 @@ export const api = {
   getAntibioticsPublic: () => request<any[]>("/dashboard/antibiotics-public"),
   getSurveillanceQuality: (hospital?: string) =>
     request<any>(`/dashboard/surveillance-quality${hospital ? `?hospital=${encodeURIComponent(hospital)}` : ""}`),
+
+  // Antimicrobial consumption (WHO GLASS-AMC)
+  getAmcSummary: (hospital?: string, fromMonth?: string, toMonth?: string) => {
+    const params = [
+      hospital ? `hospital=${encodeURIComponent(hospital)}` : "",
+      fromMonth ? `from_month=${encodeURIComponent(fromMonth)}` : "",
+      toMonth ? `to_month=${encodeURIComponent(toMonth)}` : "",
+    ].filter(Boolean).join("&");
+    return request<any>(`/amc/summary${params ? `?${params}` : ""}`);
+  },
+  getAmcUse: (limit = 50) => request<any[]>(`/amc/use?limit=${limit}`),
+  getAmcActivity: () => request<any[]>("/amc/activity"),
+  recordAmcUse: (payload: any) =>
+    request<any>("/amc/use", { method: "POST", body: JSON.stringify(payload) }),
+  recordAmcActivity: (payload: any) =>
+    request<any>("/amc/activity", { method: "POST", body: JSON.stringify(payload) }),
   getGuidelinesPublic: () => request<any[]>("/dashboard/guidelines-public"),
   getMechanisms: () => request<any>("/dashboard/mechanisms"),
 

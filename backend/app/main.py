@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.db import engine, create_db_and_tables, get_session
 from app.routers import (
     admin,
+    amc,
     antibiotics,
     assistant,
     audit,
@@ -68,6 +69,7 @@ for router in (
     reports.router,
     admin.router,
     publications.router,
+    amc.router,
 ):
     app.include_router(router, prefix="/api/v1")
 

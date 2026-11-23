@@ -1,9 +1,12 @@
 from app.core.config import settings
 from sqlmodel import Session, select
-from app.models import Organism, Antibiotic, Patient, TreatmentProtocol, User
+from app.models import (
+    Organism, Antibiotic, Patient, TreatmentProtocol, User,
+    AntibioticUse, HospitalActivity, LabResult,
+)
 from app.services.auth import hash_password
-from app.models import Antibiotic, Patient, Organism, LabResult
 from app.services.surveillance import patient_key
+from app.data.ddd import WHO_DDD
 from app.data.global_amr import (
     ANTIBIOTICS as GLOBAL_ANTIBIOTICS,
     ORGANISMS as GLOBAL_ORGANISMS,
@@ -120,6 +123,15 @@ def seed_database(session: Session):
     for abx in antibiotics:
         if abx.id not in existing_antibiotic_ids:
             session.add(abx)
+
+    # Backfill WHO ATC/DDD values, including databases seeded before consumption
+    # reporting existed. Safe to run on every startup.
+    for drug in session.exec(select(Antibiotic)).all():
+        reference = WHO_DDD.get(drug.id)
+        if reference and (not drug.atc_code or not drug.ddd_value_mg):
+            drug.atc_code, drug.ddd_value_mg, drug.ddd_route, _ = reference
+            session.add(drug)
+    session.commit()
 
     # --- TREATMENT PROTOCOLS ---
     protocols = [
@@ -315,5 +327,52 @@ def seed_database(session: Session):
             lr.patient_key = patient_key(None, lr.patient_name, lr.hospital)
             session.add(lr)
 
+    # --- ANTIMICROBIAL CONSUMPTION (GLASS-AMC) ---
+    # A small demonstrator so the consumption dashboard is useful on first run.
+    if not session.exec(select(AntibioticUse)).first():
+        demo_uses = [
+            ("ceftri", "Mulago National Referral Hospital", "Medical ward", "2026-01-04", 7, 2000.0),
+            ("pipetazo", "Mulago National Referral Hospital", "ICU", "2026-01-09", 10, 14000.0),
+            ("merope", "Mulago National Referral Hospital", "ICU", "2026-01-15", 7, 3000.0),
+            ("nitro", "Mulago National Referral Hospital", "Medical ward", "2026-02-03", 5, None),
+            ("ceftri", "Mulago National Referral Hospital", "Surgical ward", "2026-02-12", 6, 2000.0),
+            ("amoxi", "Jinja Regional Hospital", "Medical ward", "2026-01-07", 7, None),
+            ("coamox", "Jinja Regional Hospital", "Medical ward", "2026-02-11", 7, 1000.0),
+            ("cipro", "Jinja Regional Hospital", "Outpatient", "2026-03-02", 5, 1000.0),
+        ]
+        for drug_id, hospital, unit, start, days, dose in demo_uses:
+            session.add(
+                AntibioticUse(
+                    antibiotic_id=drug_id,
+                    hospital=hospital,
+                    unit=unit,
+                    start_date=start,
+                    end_date=start,
+                    duration_days=days,
+                    daily_dose_mg=dose,
+                    route="IV" if drug_id in {"ceftri", "pipetazo", "merope"} else "O",
+                    indication="Demo surveillance record",
+                    estimated_ddd=dose is None,
+                    entered_by="seed",
+                )
+            )
+
+    if not session.exec(select(HospitalActivity)).first():
+        denominators = {
+            "Mulago National Referral Hospital": [(1800, 220), (1750, 210), (1900, 240)],
+            "Jinja Regional Hospital": [(900, 120), (950, 130), (880, 115)],
+        }
+        for hospital, months in denominators.items():
+            for index, (patient_days, admissions) in enumerate(months, start=1):
+                session.add(
+                    HospitalActivity(
+                        hospital=hospital,
+                        period=f"2026-{index:02d}",
+                        patient_days=patient_days,
+                        admissions=admissions,
+                        entered_by="seed",
+                    )
+                )
+
     session.commit()
-    print("✅ Database seeded successfully with CDS Protocols!")
+    print("✅ Database seeded successfully with CDS Protocols and AMC reference data!")

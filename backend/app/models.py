@@ -32,7 +32,42 @@ class Antibiotic(SQLModel, table=True):
     hepatic_adjustment: str = ""
     interactions: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     adverse_effects: List[str] = Field(default_factory=list, sa_column=Column(JSON))
-    tags: List[str] = Field(default_factory=list, sa_column=Column(JSON)) 
+    tags: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+
+    # WHO ATC/DDD reference used by GLASS-AMC consumption reporting.
+    atc_code: str = ""
+    ddd_value_mg: Optional[float] = None
+    ddd_route: str = ""
+
+# --- ANTIMICROBIAL CONSUMPTION (GLASS-AMC) ---
+class AntibioticUse(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    antibiotic_id: str = Field(foreign_key="antibiotic.id", index=True)
+    patient_id: Optional[int] = Field(default=None, foreign_key="patient.id", index=True)
+    hospital: str = Field(default="", index=True)
+    unit: str = Field(default="", index=True)
+    start_date: str = ""       # YYYY-MM-DD
+    end_date: str = ""
+    duration_days: int = 0
+    daily_dose_mg: Optional[float] = None
+    route: str = ""
+    indication: str = ""
+    estimated_ddd: bool = False   # True when dose is unknown and 1 DDD/day is assumed
+    entered_by: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class HospitalActivity(SQLModel, table=True):
+    """Monthly denominator for DDD per 100 patient-days (GLASS-AMC)."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    hospital: str = Field(index=True)
+    period: str = Field(index=True)   # YYYY-MM
+    patient_days: int = 0
+    admissions: int = 0
+    population: int = 0               # catchment population, when known
+    entered_by: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
 
 # --- TREATMENT PROTOCOL MODEL ---
 class TreatmentProtocol(SQLModel, table=True):

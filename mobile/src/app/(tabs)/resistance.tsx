@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { StyleSheet, Text, View, ScrollView, useWindowDimensions, ActivityIndicator, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import Svg, { Path, Circle, Line, Rect, Text as SvgText } from "react-native-svg";
 import { api } from "../../services/api";
 import { Palette } from "../../constants/branding";
@@ -185,6 +186,7 @@ function EmpiricChecker({ stats, colors, styles }: any) {
 }
 
 export default function ResistanceScreen() {
+  const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -303,6 +305,13 @@ export default function ResistanceScreen() {
           <Text style={styles.cardTitle}>Empiric therapy checker (90% rule)</Text>
           {la ? <ActivityIndicator color={colors.primary} /> : <EmpiricChecker stats={stats} colors={colors} styles={styles} />}
         </View>
+
+        <TouchableOpacity style={styles.card} onPress={() => router.push("/consumption")}>
+          <Text style={styles.cardTitle}>Antibiotic use (WHO GLASS-AMC) →</Text>
+          <Text style={styles.footnote}>
+            AWaRe split, DDD per 100 patient-days and ward-level consumption. Open to record use and monthly denominators.
+          </Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );

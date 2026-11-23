@@ -50,6 +50,11 @@ def _ensure_new_columns() -> None:
     bool_true = "1" if dialect == "sqlite" else "TRUE"
 
     additions = {
+        "antibiotic": {
+            "atc_code": "VARCHAR DEFAULT ''",
+            "ddd_value_mg": "FLOAT DEFAULT NULL",
+            "ddd_route": "VARCHAR DEFAULT ''",
+        },
         "labresult": {
             "patient_key": "VARCHAR DEFAULT ''",
             "is_first_isolate": f"BOOLEAN DEFAULT {bool_true}",
