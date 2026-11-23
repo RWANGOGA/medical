@@ -1,0 +1,59 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-android-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm install --no-audit --no-fund
+
+      - name: Build Android APK
+        working-directory: mobile
+        run: eas build --platform android --profile preview --non-interactive --wait
+
+      - name: Get latest Android build artifact URL
+        working-directory: mobile
+        id: build-info
+        run: |
+          BUILD_JSON=$(eas build:list --json --platform android --limit 1)
+          BUILD_ID=$(echo "$BUILD_JSON" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);console.log(j[0].id)})")
+          ARTIFACT_URL=$(echo "$BUILD_JSON" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);console.log(j[0].artifacts?.[0]?.url||'')})")
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "artifact_url=$ARTIFACT_URL" >> $GITHUB_OUTPUT
+
+      - name: Download APK artifact
+        if: steps.build-info.outputs.artifact_url != ''
+        run: |
+          curl -L -o medical.apk ${{ steps.build-info.outputs.artifact_url }}
+          file medical.apk
+
+      - name: Upload APK artifact
+        if: steps.build-info.outputs.artifact_url != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: medical-android-apk
+          path: medical.apk
+          retention-days: 30
