@@ -7,6 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
+  TextInput,
   ActivityIndicator,
   Alert,
 } from "react-native";
@@ -18,6 +19,29 @@ import { api } from "../../services/api";
 import { Palette } from "../../constants/branding";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
+
+const SITES = [
+  { label: "Not specified", value: "" },
+  { label: "Urinary", value: "urinary" },
+  { label: "Blood", value: "blood" },
+  { label: "Respiratory", value: "respiratory" },
+  { label: "Skin / soft tissue", value: "skin" },
+  { label: "Intra-abdominal", value: "intra-abdominal" },
+  { label: "CNS", value: "cns" },
+];
+
+/**
+ * Accepts entries such as "Ceftriaxone: R, Nitrofurantoin=S" or one per line.
+ * Unknown text is ignored by the API, so a typo cannot silently change therapy.
+ */
+function parseSusceptibility(text: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const part of text.split(/[,;\n]+/)) {
+    const match = part.trim().match(/^(.+?)\s*[:=]?\s*([SIR])$/i);
+    if (match) result[match[1].trim()] = match[2].toUpperCase();
+  }
+  return result;
+}
 
 export default function CDSScreen() {
   const router = useRouter();
@@ -34,7 +58,16 @@ export default function CDSScreen() {
   }, [authLoading, isAuthenticated]);
 
   // 1. Read pre-filled patient data from the Patient Chart
-  const { prefill_organism, prefill_allergy, prefill_pregnant, prefill_renal } = useLocalSearchParams();
+  const {
+    prefill_organism,
+    prefill_allergy,
+    prefill_pregnant,
+    prefill_renal,
+    prefill_site,
+    prefill_esbl,
+    prefill_carbapenemase,
+    prefill_mrsa,
+  } = useLocalSearchParams();
 
   // 2. Fetch Organisms for the selector
   const { data: organisms, isLoading: loadingOrgs } = useQuery({
@@ -51,6 +84,11 @@ export default function CDSScreen() {
   const [pregnant, setPregnant] = useState(prefill_pregnant === "true");
   const [renal, setRenal] = useState(prefill_renal === "true");
   const [severe, setSevere] = useState(false);
+  const [site, setSite] = useState((prefill_site as string) || "");
+  const [esbl, setEsbl] = useState(prefill_esbl === "true");
+  const [carbapenemase, setCarbapenemase] = useState(prefill_carbapenemase === "true");
+  const [mrsa, setMrsa] = useState(prefill_mrsa === "true");
+  const [susceptibilityText, setSusceptibilityText] = useState("");
 
   // 4. Mutation to call the CDS Engine
   const mutation = useMutation({
@@ -71,6 +109,11 @@ export default function CDSScreen() {
       pregnant: pregnant,
       renal_impairment: renal,
       severe: severe,
+      infection_site: site,
+      culture_susceptibility: parseSusceptibility(susceptibilityText),
+      esbl,
+      carbapenemase,
+      mrsa,
     });
   };
 
@@ -133,6 +176,61 @@ export default function CDSScreen() {
           </View>
         </View>
 
+        {/* Infection site */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>3. Infection Site</Text>
+          <View style={styles.chipContainer}>
+            {SITES.map((option) => (
+              <TouchableOpacity
+                key={option.value || "unspecified"}
+                style={[styles.chip, site === option.value && styles.chipSelected]}
+                onPress={() => setSite(option.value)}
+              >
+                <Text
+                  style={[styles.chipText, site === option.value && styles.chipTextSelected]}
+                >
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.helperText}>
+            The site changes which agents are appropriate, for example
+            nitrofurantoin is urine-only.
+          </Text>
+        </View>
+
+        {/* Resistance markers */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>4. Resistance Markers</Text>
+          <View style={styles.card}>
+            <ToggleRow label="ESBL producer" value={esbl} onValueChange={setEsbl} styles={styles} colors={colors} />
+            <ToggleRow label="Carbapenemase producer (CRE/CPE)" value={carbapenemase} onValueChange={setCarbapenemase} styles={styles} colors={colors} />
+            <ToggleRow label="MRSA (mecA positive)" value={mrsa} onValueChange={setMrsa} styles={styles} colors={colors} />
+          </View>
+        </View>
+
+        {/* Culture susceptibility */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>5. Culture Susceptibility (optional)</Text>
+          <View style={styles.card}>
+            <TextInput
+              style={[styles.input, { color: colors.text }]}
+              value={susceptibilityText}
+              onChangeText={setSusceptibilityText}
+              placeholder="e.g. Ceftriaxone: R, Nitrofurantoin: S"
+              placeholderTextColor={colors.subtext}
+              multiline
+              autoCapitalize="words"
+              accessibilityLabel="Culture susceptibility results"
+            />
+            <Text style={styles.helperText}>
+              Enter one drug per entry as Drug: S, I or R. Results drive the
+              recommendation and override empirical choices.
+            </Text>
+          </View>
+        </View>
+
         {/* Action Button */}
         <TouchableOpacity
           style={[styles.button, (!selectedOrgId || mutation.isPending) && styles.buttonDisabled]}
@@ -147,7 +245,23 @@ export default function CDSScreen() {
         {/* Results */}
         {result && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>3. Treatment Protocol</Text>
+            <Text style={styles.sectionTitle}>6. Treatment Protocol</Text>
+
+            {result.culture_directed && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>Culture-directed recommendation</Text>
+              </View>
+            )}
+
+            {/* Warnings */}
+            {result.warnings && result.warnings.length > 0 && (
+              <View style={styles.warningBox}>
+                <Text style={styles.warningTitle}>Safety Warnings</Text>
+                {result.warnings.map((warning: string, idx: number) => (
+                  <Text key={idx} style={styles.warningText}>• {warning}</Text>
+                ))}
+              </View>
+            )}
 
             {/* First Line */}
             <ResultCard title="First-Line" color={colors.access} items={result.first_line} styles={styles} />
@@ -296,6 +410,57 @@ function makeStyles(c: Palette) {
       borderTopWidth: 1,
       borderTopColor: c.border,
       paddingTop: 12,
+    },
+    helperText: {
+      fontSize: 12,
+      color: c.subtext,
+      lineHeight: 18,
+      marginTop: 8,
+    },
+    input: {
+      minHeight: 64,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 10,
+      padding: 12,
+      fontSize: 14,
+      textAlignVertical: "top",
+      backgroundColor: c.background,
+    },
+    badge: {
+      alignSelf: "flex-start",
+      backgroundColor: c.access,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 12,
+      marginBottom: 12,
+    },
+    badgeText: {
+      color: c.onPrimary,
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    warningBox: {
+      backgroundColor: c.surfaceAlt,
+      borderWidth: 1,
+      borderColor: c.watch,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 12,
+    },
+    warningTitle: {
+      fontSize: 13,
+      fontWeight: "800",
+      color: c.watch,
+      marginBottom: 6,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+    },
+    warningText: {
+      fontSize: 13,
+      color: c.text,
+      lineHeight: 19,
+      marginBottom: 4,
     },
   });
 }

@@ -28,13 +28,29 @@ export default function PatientDetailScreen() {
 
   // Guess the organism ID from the culture result for the CDS engine
   const guessOrganismId = (culture: string) => {
-    if (culture.toLowerCase().includes("e. coli")) return "ecoli";
-    if (culture.toLowerCase().includes("klebsiella")) return "kpneumo";
-    return "ecoli"; // fallback
+    const text = culture.toLowerCase();
+    if (text.includes("e. coli") || text.includes("escherichia")) return "ecoli";
+    if (text.includes("klebsiella")) return "kpneumo";
+    if (text.includes("aureus") || text.includes("mrsa") || text.includes("staph")) return "saureus";
+    if (text.includes("pseudomonas")) return "pseudo";
+    return "";
+  };
+
+  const guessSite = (site: string) => {
+    const text = (site || "").toLowerCase();
+    if (text.includes("urin") || text.includes("bladder") || text.includes("cyst")) return "urinary";
+    if (text.includes("blood") || text.includes("bacter")) return "blood";
+    if (text.includes("respir") || text.includes("lung") || text.includes("pneumon")) return "respiratory";
+    if (text.includes("skin") || text.includes("wound") || text.includes("soft tissue")) return "skin";
+    if (text.includes("abdomin") || text.includes("periton")) return "intra-abdominal";
+    if (text.includes("cns") || text.includes("mening") || text.includes("brain")) return "cns";
+    return "";
   };
 
   const handleRunCDS = () => {
-    const orgId = guessOrganismId(patient.culture_results);
+    const culture = patient.culture_results || "";
+    const orgId = guessOrganismId(culture);
+    const lower = culture.toLowerCase();
 
     // Pass patient-specific constraints directly to the CDS engine
     router.push({
@@ -44,6 +60,13 @@ export default function PatientDetailScreen() {
         prefill_allergy: patient.allergies.some((a: string) => a.toLowerCase().includes("penicillin")) ? "true" : "false",
         prefill_pregnant: patient.pregnancy_status.toLowerCase().includes("not") ? "false" : "true",
         prefill_renal: patient.renal_function.toLowerCase().includes("impair") ? "true" : "false",
+        prefill_site: guessSite(patient.infection_site || ""),
+        prefill_esbl: lower.includes("esbl") ? "true" : "false",
+        prefill_carbapenemase:
+          lower.includes("carbapenemase") || lower.includes(" cpe") || lower.includes(" cre")
+            ? "true"
+            : "false",
+        prefill_mrsa: lower.includes("mrsa") || lower.includes("methicillin-resistant") ? "true" : "false",
       },
     });
   };

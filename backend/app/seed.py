@@ -5,10 +5,13 @@ from app.services.auth import hash_password
 from app.models import Antibiotic, Patient, Organism, LabResult
 
 def seed_database(session: Session):
-    if session.exec(select(Organism)).first():
-        return
+    """Idempotently load reference data and demo content.
 
-    print("🌱 Seeding database with Makerere clinical data & CDS Protocols...")
+    Reference data (organisms, antibiotics, protocols) is added when missing so
+    deployments can pick up new clinical content without a manual migration.
+    Demo patients, lab results and users are only created once.
+    """
+    print("🌱 Seeding database with AMR clinical data & CDS protocols...")
 
     # --- ORGANISMS ---
     organisms = [
@@ -33,7 +36,10 @@ def seed_database(session: Session):
                  virulence_factors=["Exotoxin A", "Biofilm"], risk_factors=["Ventilation", "Cystic fibrosis"],
                  clinical_importance="Intrinsically resistant; WHO critical-priority pathogen.", resistance_rate=49),
     ]
-    for org in organisms: session.add(org)
+    existing_organism_ids = {o.id for o in session.exec(select(Organism)).all()}
+    for org in organisms:
+        if org.id not in existing_organism_ids:
+            session.add(org)
 
     # --- ANTIBIOTICS ---
     antibiotics = [
@@ -80,8 +86,32 @@ def seed_database(session: Session):
         Antibiotic(id="linezolid", generic_name="Linezolid", brand_names=["Zyvox"], drug_class="Oxazolidinone",
                    aware_category="Reserve", dosing_adult="600 mg PO/IV every 12 hours.",
                    tags=["oxazolidinone", "MRSA", "VRE"]),
+
+        # Anti-staphylococcal and anti-pseudomonal agents used by the CDS engine
+        Antibiotic(id="cloxa", generic_name="Cloxacillin", brand_names=["Orbenin"],
+                   drug_class="Penicillinase-resistant penicillin", aware_category="Access",
+                   dosing_adult="500 mg-1 g PO/IV every 6 hours.",
+                   tags=["beta-lactam", "penicillin", "anti-staphylococcal"]),
+        Antibiotic(id="cefaz", generic_name="Cefazolin", brand_names=["Ancef"],
+                   drug_class="1st-generation Cephalosporin", aware_category="Access",
+                   dosing_adult="1-2 g IV every 8 hours.",
+                   renal_adjustment="Reduce dose when creatinine clearance is below 35 mL/min.",
+                   tags=["beta-lactam", "cephalosporin", "anti-staphylococcal"]),
+        Antibiotic(id="cefepime", generic_name="Cefepime", brand_names=["Maxipime"],
+                   drug_class="4th-generation Cephalosporin", aware_category="Watch",
+                   dosing_adult="1-2 g IV every 8-12 hours; higher doses for Pseudomonas.",
+                   renal_adjustment="Adjust dose and interval by creatinine clearance.",
+                   tags=["beta-lactam", "cephalosporin"]),
+        Antibiotic(id="vanco", generic_name="Vancomycin", brand_names=["Vancocin"],
+                   drug_class="Glycopeptide", aware_category="Watch",
+                   dosing_adult="15-20 mg/kg IV every 8-12 hours; target AUC/MIC 400-600.",
+                   renal_adjustment="Dose by renal function with therapeutic drug monitoring.",
+                   tags=["glycopeptide", "MRSA"]),
     ]
-    for abx in antibiotics: session.add(abx)
+    existing_antibiotic_ids = {a.id for a in session.exec(select(Antibiotic)).all()}
+    for abx in antibiotics:
+        if abx.id not in existing_antibiotic_ids:
+            session.add(abx)
 
     # --- TREATMENT PROTOCOLS ---
     protocols = [
@@ -100,9 +130,30 @@ def seed_database(session: Session):
             reserve=["merope"],
             duration="10-14 days, longer if bacteremic",
             monitoring=["Renal function", "Repeat cultures at 48-72h if unwell"]
-        )
+        ),
+        TreatmentProtocol(
+            organism_id="saureus",
+            first_line=["cloxa", "cefaz"],
+            second_line=["coamox", "cotrim"],
+            reserve=["vanco", "linezolid"],
+            duration="5-7 days for uncomplicated skin infection; 14+ days for bacteremia or endocarditis",
+            monitoring=["Repeat blood cultures at 48-72h if bacteremic", "Renal function and vancomycin levels", "Review need for source control"]
+        ),
+        TreatmentProtocol(
+            organism_id="pseudo",
+            first_line=["pipetazo"],
+            second_line=["cefepime", "cipro"],
+            reserve=["merope", "colistin"],
+            duration="7-14 days depending on site and clinical response",
+            monitoring=["Renal function", "Repeat culture and susceptibility at 48-72h", "Aminoglycoside levels if used"]
+        ),
     ]
-    for p in protocols: session.add(p)
+    existing_protocol_organisms = {
+        p.organism_id for p in session.exec(select(TreatmentProtocol)).all()
+    }
+    for p in protocols:
+        if p.organism_id not in existing_protocol_organisms:
+            session.add(p)
 
     # --- PATIENTS (Historical data for real dashboard aggregation) ---
     patients = [
@@ -177,13 +228,17 @@ def seed_database(session: Session):
                     {"date": "2026", "drug": "Colistin", "outcome": "current", "note": "Last resort"}
                 ]),
     ]
-    for pat in patients: session.add(pat)
+    if not session.exec(select(Patient)).first():
+        for pat in patients:
+            session.add(pat)
 
     # --- DEMO USERS (opt-in only) ---
     # Default accounts with published passwords are a security hole. Demo users
     # are created only when SEED_DEMO_USERS=true AND passwords are supplied.
     if settings.SEED_DEMO_USERS:
-        if settings.SEED_DOCTOR_PASSWORD:
+        if settings.SEED_DOCTOR_PASSWORD and not session.exec(
+            select(User).where(User.username == "dr.demo")
+        ).first():
             session.add(
                 User(
                     username="dr.demo",
@@ -196,7 +251,9 @@ def seed_database(session: Session):
                 )
             )
             print("Seeded demo doctor 'dr.demo'.")
-        if settings.SEED_ADMIN_PASSWORD:
+        if settings.SEED_ADMIN_PASSWORD and not session.exec(
+            select(User).where(User.username == "admin")
+        ).first():
             session.add(
                 User(
                     username="admin",
@@ -236,7 +293,9 @@ def seed_database(session: Session):
         LabResult(patient_name="Ouma P.", organism_id="saureus", specimen="Wound swab", hospital="Jinja Regional Hospital",
                   susceptibility={"Vancomycin": "S", "Ceftriaxone": "S"}),
     ]
-    for lr in lab_results: session.add(lr)   
+    if not session.exec(select(LabResult)).first():
+        for lr in lab_results:
+            session.add(lr)
 
     session.commit()
     print("✅ Database seeded successfully with CDS Protocols!")

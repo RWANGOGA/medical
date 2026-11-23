@@ -25,7 +25,7 @@ concurrency:
 jobs:
   build-android-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
     env:
       RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'apk-latest' }}
     defaults:
@@ -117,8 +117,12 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x android/gradlew
+          # React Native's new architecture compiles a lot of C++; the default
+          # 2 GB heap is tight on a runner. Give Gradle room and reuse outputs.
+          sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g/' \
+            android/gradle.properties
           # Device ABIs only: emulator-only x86/x86_64 builds are wasted work in CI.
-          (cd android && ./gradlew assembleRelease --no-daemon --stacktrace \
+          (cd android && ./gradlew assembleRelease --no-daemon --stacktrace --build-cache \
             -PreactNativeArchitectures=arm64-v8a,armeabi-v7a)
 
       - name: Collect APK
