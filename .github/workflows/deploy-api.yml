@@ -1,0 +1,29 @@
+name: Deploy API
+
+# Triggers the Render deploy hook after backend changes.
+# Add the hook URL as the repository secret RENDER_DEPLOY_HOOK:
+#   Render dashboard -> service -> Settings -> Deploy Hook
+# Without the secret this workflow is a no-op, so it is safe to keep in main.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-api.yml'
+  workflow_dispatch:
+
+jobs:
+  trigger-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "::notice::RENDER_DEPLOY_HOOK is not configured; skipping API deploy."
+            exit 0
+          fi
+          curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK"
+          echo "Render deploy triggered."
