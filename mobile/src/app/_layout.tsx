@@ -12,6 +12,7 @@ import { ApiError, flushPendingMutations } from "../services/api";
 import { onOfflineSynced, refreshPendingCount, initCacheScope } from "../services/offline";
 import { DownloadAppPrompt } from "../components/download-app-prompt";
 import { AppTopBar } from "../components/top-bar";
+import { OnboardingTour } from "../components/onboarding-tour";
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -53,6 +54,7 @@ function AppContent() {
         <Stack screenOptions={{ headerShown: false }} />
       </View>
       <DownloadAppPrompt />
+      <OnboardingTour />
     </View>
   );
 }

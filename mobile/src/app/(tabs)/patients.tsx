@@ -9,6 +9,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useResponsive } from "../../utils/responsive";
+import { EmptyState } from "../../components/empty-state";
 
 export default function PatientsScreen() {
   const { colors } = useTheme();
@@ -50,31 +51,42 @@ export default function PatientsScreen() {
       </View>
 
       <ScrollView style={styles.container} contentContainerStyle={styles.listContent}>
-        {(patients || []).map((item: any) => (
-          <TouchableOpacity
-            key={String(item.id)}
-            style={StyleSheet.flatten([styles.card, isTabletOrLarger && styles.cardTablet])}
-            onPress={() => router.push(`/patient/${item.id}`)}
-            activeOpacity={0.85}
-          >
-            <View style={styles.cardHeader}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{item.name?.charAt(0) || "?"}</Text>
+        {!patients || patients.length === 0 ? (
+          <EmptyState
+            colors={colors}
+            icon="people-outline"
+            title="No active cases yet"
+            subtitle="Register a patient to start tracking treatment and resistance."
+            actionLabel="Register patient"
+            onAction={() => router.push("/add-patient")}
+          />
+        ) : (
+          (patients || []).map((item: any) => (
+            <TouchableOpacity
+              key={String(item.id)}
+              style={StyleSheet.flatten([styles.card, isTabletOrLarger && styles.cardTablet])}
+              onPress={() => router.push(`/patient/${item.id}`)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{item.name?.charAt(0) || "?"}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+                  <Text style={styles.meta}>{item.age}y · {item.sex} · {item.diagnosis}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-                <Text style={styles.meta}>{item.age}y · {item.sex} · {item.diagnosis}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
-            </View>
-            {item.culture_results ? (
-              <View style={styles.cultureBadge}>
-                <Ionicons name="flask" size={12} color={colors.reserve} />
-                <Text style={styles.cultureText} numberOfLines={1}>{item.culture_results}</Text>
-              </View>
-            ) : null}
-          </TouchableOpacity>
-        ))}
+              {item.culture_results ? (
+                <View style={styles.cultureBadge}>
+                  <Ionicons name="flask" size={12} color={colors.reserve} />
+                  <Text style={styles.cultureText} numberOfLines={1}>{item.culture_results}</Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+          ))
+        )}
       </ScrollView>
     </View>
   );
