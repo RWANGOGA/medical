@@ -13,7 +13,7 @@ import { NavigationBar } from "../components/navigation-bar";
 
 export default function AboutScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, mode, setMode } = useTheme();
   const { t, locale, setLocale } = useI18n();
   const { online, pending } = useOffline();
   const insets = useSafeAreaInsets();
@@ -63,6 +63,21 @@ export default function AboutScreen() {
             <Text style={styles.rowLabel}>Language</Text>
             <Text style={{ color: colors.text, fontWeight: "700" }}>{t(LOCALE_LABEL_KEY[locale])}</Text>
           </Text>
+        </View>
+
+        <Text style={styles.sectionTitle}>Theme</Text>
+        <View style={styles.chips}>
+          {(["system", "light", "dark"] as const).map((m) => (
+            <TouchableOpacity
+              key={m}
+              onPress={() => setMode(m)}
+              style={[styles.langBtn, { backgroundColor: mode === m ? colors.primary : colors.surface, borderColor: colors.border }]}
+            >
+              <Text style={{ color: mode === m ? colors.onPrimary : colors.text, fontWeight: "700", textTransform: "capitalize" }}>
+                {m}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         <Text style={styles.sectionTitle}>{t("lang.label")}</Text>

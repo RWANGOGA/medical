@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
+import { useI18n } from "../context/I18nContext";
 import { useOffline } from "../hooks/use-offline";
 import { useResponsive } from "../utils/responsive";
 import type { Palette } from "../constants/branding";
@@ -49,6 +50,7 @@ export function NavigationBar({
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated } = useAuth();
+  const { t } = useI18n();
   const { isDesktopOrLarger, isPhone } = useResponsive();
   const { online, pending, syncing, syncNow } = useOffline();
 
@@ -62,6 +64,13 @@ export function NavigationBar({
     const current = pathname || "/";
     if (route === "/") return current === "/";
     return current === route || current.startsWith(`${route}/`);
+  };
+
+  const labels: Record<string, string> = {
+    home: t("nav.home"), search: t("nav.search"), resistance: t("nav.resistance"),
+    consumption: t("nav.consumption"), guidelines: t("nav.guidelines"), publications: t("nav.publications"),
+    patients: t("nav.patients"), "add-patient": t("nav.registerPatient"), "add-lab-result": t("nav.labResult"),
+    cds: t("nav.cds"), audit: t("nav.audit"), reports: "Reports",
   };
 
   const content = (
@@ -117,12 +126,12 @@ export function NavigationBar({
             style={buttonStyle}
             onPress={() => router.push(item.route as never)}
             accessibilityRole="button"
-            accessibilityLabel={`Navigate to ${item.label}`}
+            accessibilityLabel={`Navigate to ${labels[item.key] || item.label}`}
             testID={`nav-${item.key}`}
           >
             <Ionicons name={item.icon} size={16} color={active ? colors.primary : colors.subtext} />
             <Text style={labelStyle} numberOfLines={1}>
-              {item.label}
+              {labels[item.key] || item.label}
             </Text>
           </TouchableOpacity>
         );

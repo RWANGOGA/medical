@@ -5,6 +5,7 @@ import type { Palette } from "../../../constants/branding";
 import {
   UGANDA_AMR_RESOURCES,
   UGANDA_PRIORITY_PATHOGENS,
+  UGANDA_COINFECTION_GUIDANCE,
 } from "../../../constants/uganda";
 
 /**
@@ -68,6 +69,17 @@ export function UgandaContext({ colors }: { colors: Palette }) {
             </View>
           </View>
           <Text style={styles.pathogenNote}>{pathogen.localNote}</Text>
+        </View>
+      ))}
+
+      <Text style={styles.subHeading}>Common co-infections</Text>
+      {UGANDA_COINFECTION_GUIDANCE.map((item) => (
+        <View key={item.key} style={styles.pathogenRow}>
+          <View style={styles.pathogenHeader}>
+            <Ionicons name={item.icon as any} size={15} color={colors.primary} />
+            <Text style={[styles.pathogenName, { flex: 1, marginLeft: 6 }]}>{item.title}</Text>
+          </View>
+          <Text style={styles.pathogenNote}>{item.summary}</Text>
         </View>
       ))}
 

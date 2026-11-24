@@ -339,6 +339,45 @@ export const UGANDA_LAB_SPECIMENS = [
   "Bone / joint",
 ];
 
+/** Common co-infections that change empiric therapy and stewardship choices in Uganda. */
+export const UGANDA_COINFECTION_GUIDANCE = [
+  {
+    key: "malaria",
+    title: "Malaria co-infection",
+    icon: "bug",
+    summary: "Fever in Uganda is often malaria — confirm with RDT/microscopy before antibiotics.",
+    points: [
+      "Test for malaria in all febrile patients; a positive RDT does not exclude bacterial infection.",
+      "Uncomplicated malaria: ACT per UCG 2023; avoid unnecessary antibiotics.",
+      "Severe malaria: parenteral artesunate plus empiric antibiotics if bacterial sepsis cannot be excluded.",
+      "Reassess at 48–72 h; stop antibiotics if cultures negative and malaria treated.",
+    ],
+  },
+  {
+    key: "tb",
+    title: "Tuberculosis",
+    icon: "medkit",
+    summary: "Chronic cough and weight loss — collect sputum before starting antibiotics.",
+    points: [
+      "Screen for TB in prolonged cough, night sweats and wasting; use Xpert MTB/RIF where available.",
+      "Do not give broad-spectrum antibiotics as a substitute for TB diagnostics.",
+      "Drug-resistant TB requires referral — notify and refer per national TB programme.",
+    ],
+  },
+  {
+    key: "hiv",
+    title: "HIV and immune suppression",
+    icon: "heart",
+    summary: "Advanced HIV changes the differential and the risk of opportunistic infection.",
+    points: [
+      "Check HIV status in patients with severe or unusual infections; linkage to ART is essential.",
+      "Low CD4 counts raise the risk of cryptococcal, TB and bacterial infections — investigate broadly.",
+      "Watch for drug interactions and adverse effects with ART and antimicrobials.",
+      "Use confirmed susceptibility results to narrow therapy early.",
+    ],
+  },
+];
+
 export function formatUgandaDateTime(value: string | number | Date): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);

@@ -25,6 +25,7 @@ export function EmptyState({ colors, icon = "file-tray-outline", title, subtitle
           style={[styles.action, { backgroundColor: colors.primary }]}
           onPress={onAction}
           accessibilityRole="button"
+          accessibilityLabel={actionLabel}
         >
           <Text style={[styles.actionText, { color: colors.onPrimary }]}>{actionLabel}</Text>
         </TouchableOpacity>
