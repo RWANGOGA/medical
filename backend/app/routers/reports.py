@@ -94,6 +94,7 @@ def report_summary(
         "antibiogram": {"organisms": organisms, "drugs": drugs, "rows": antibiogram},
         "alerts": alerts,
     }
+@router.get("/monthly")
 def monthly_report(
     hospital: Optional[str] = Query(None),
     session: Session = Depends(get_session),
