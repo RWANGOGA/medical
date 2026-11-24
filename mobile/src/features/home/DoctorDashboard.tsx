@@ -8,6 +8,8 @@ import { api } from "../../services/api";
 import { Palette } from "../../constants/branding";
 import { useAssistant } from "../../context/AssistantContext";
 import { HospitalFilter } from "./components/HospitalFilter";
+import { NavigationBar } from "../../components/navigation-bar";
+import { AppFooter } from "../../components/footer";
 import { useResponsive } from "../../utils/responsive";
 
 const ALL_HOSPITALS = "All Hospitals";
@@ -197,6 +199,9 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
 
       {/* Hospital Filter */}
       <HospitalFilter value={hospital} onChange={setHospital} colors={colors} isAuthenticated={true} />
+
+      {/* Navigation buttons — appear on every page */}
+      <NavigationBar colors={colors} />
 
       <View style={styles.content}>
         {/* Critical Alerts */}
@@ -426,6 +431,9 @@ export function DoctorDashboard({ user, colors }: DoctorDashboardProps) {
           )}
         </View>
       </View>
+
+      {/* Footer with app features — appears on every page */}
+      <AppFooter colors={colors} />
     </ScrollView>
   );
 }

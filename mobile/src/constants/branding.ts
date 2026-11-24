@@ -55,7 +55,7 @@ export const PALETTES: Record<"light" | "dark", Palette> = {
 export const BRANDING = {
   appName: "Steward AMR",
   officialName: "Antimicrobial Stewardship Platform",
-  origin: "Originally piloted with Makerere College of Health Sciences",
+  origin: "Independent clinical antimicrobial stewardship platform",
   /** Kept for compatibility; resolves to the light palette. Use useTheme() instead. */
   colors: PALETTES.light,
 };

@@ -10,6 +10,8 @@ import { api } from "../services/api";
 import { Palette } from "../constants/branding";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
+import { NavigationBar } from "../components/navigation-bar";
+import { AppFooter } from "../components/footer";
 
 const SIR = ["S", "I", "R"];
 
@@ -137,6 +139,8 @@ export default function AddLabResultScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 40, paddingTop: insets.top + 16 }}>
+      {/* Navigation buttons — appear on every page */}
+      <NavigationBar colors={colors} />
       <View style={styles.column}>
         <View style={styles.header}>
           <Text style={styles.title}>Enter Lab Result</Text>
@@ -287,6 +291,9 @@ export default function AddLabResultScreen() {
           {loading ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.submitBtnText}>Save Result</Text>}
         </TouchableOpacity>
       </View>
+
+      {/* Footer with app features — appears on every page */}
+      <AppFooter colors={colors} />
     </ScrollView>
   );
 }

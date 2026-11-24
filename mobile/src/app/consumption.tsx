@@ -11,6 +11,8 @@ import { Palette } from "../constants/branding";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import { CONTENT_MAX_WIDTH } from "../components/screen";
+import { NavigationBar } from "../components/navigation-bar";
+import { AppFooter } from "../components/footer";
 
 const ALL = "All Hospitals";
 
@@ -185,6 +187,8 @@ export default function ConsumptionScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 90 }}>
+      {/* Navigation buttons — appear on every page */}
+      <NavigationBar colors={colors} />
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <View style={styles.headerInner}>
           <Text style={styles.title}>Antibiotic Consumption</Text>
@@ -337,6 +341,9 @@ export default function ConsumptionScreen() {
           </>
         )}
       </View>
+
+      {/* Footer with app features — appears on every page */}
+      <AppFooter colors={colors} />
     </ScrollView>
   );
 }

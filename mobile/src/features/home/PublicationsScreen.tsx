@@ -84,7 +84,7 @@ export function PublicationsScreen({ colors }: PublicationsScreenProps) {
     } else if (pub.content_type === "video" && pub.content_url) {
       Linking.openURL(pub.content_url);
     } else {
-      router.push(`/publication/${pub.id}`);
+      router.push(`/publication/${pub.id}` as any);
     }
   };
 

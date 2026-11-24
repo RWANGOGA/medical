@@ -10,6 +10,8 @@ import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import { Palette } from "../constants/branding";
 import { Screen } from "../components/screen";
+import { NavigationBar } from "../components/navigation-bar";
+import { AppFooter } from "../components/footer";
 
 type Phase = "find" | "results" | "form";
 
@@ -161,7 +163,10 @@ export default function AddPatientScreen() {
       <Stack.Screen options={{ title: editId ? "Edit Patient" : "Register Patient" }} />
       <Screen scroll keyboardAvoid contentStyle={{ padding: 20, paddingBottom: 40 }}>
 
-        {phase === "find" && (
+      {/* Navigation buttons — appear on every page */}
+      <NavigationBar colors={colors} />
+
+      {phase === "find" && (
           <>
             <View style={styles.header}>
               <Text style={styles.title}>Patient Lookup</Text>
@@ -468,6 +473,9 @@ export default function AddPatientScreen() {
             )}
           </>
         )}
+
+        {/* Footer with app features — appears on every page */}
+        <AppFooter colors={colors} />
       </Screen>
     </>
   );

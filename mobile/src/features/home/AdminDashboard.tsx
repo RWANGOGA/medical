@@ -10,6 +10,8 @@ import { api } from "../../services/api";
 import { Palette } from "../../constants/branding";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
+import { NavigationBar } from "../../components/navigation-bar";
+import { AppFooter } from "../../components/footer";
 
 const ALL_HOSPITALS = "All Hospitals";
 
@@ -290,7 +292,7 @@ export function AdminDashboard({ colors }: AdminDashboardProps) {
     <View>
       <TouchableOpacity
         style={styles.addButton}
-        onPress={() => router.push("/admin/publication-create")}
+        onPress={() => router.push("/admin/publication-create" as any)}
       >
         <Ionicons name="add-circle" size={24} color={colors.onPrimary} />
         <Text style={styles.addButtonText}>New Publication</Text>
@@ -357,12 +359,18 @@ export function AdminDashboard({ colors }: AdminDashboardProps) {
         ))}
       </View>
 
+      {/* Navigation buttons — appear on every page */}
+      <NavigationBar colors={colors} />
+
       <View style={styles.content}>
         {activeTab === "overview" && renderOverview()}
         {activeTab === "doctors" && renderDoctors()}
         {activeTab === "patients" && renderPatients()}
         {activeTab === "publications" && renderPublications()}
       </View>
+
+      {/* Footer with app features — appears on every page */}
+      <AppFooter colors={colors} />
     </ScrollView>
   );
 }

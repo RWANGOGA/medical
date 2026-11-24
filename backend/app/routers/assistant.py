@@ -21,7 +21,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
 
-SYSTEM_PROMPT = """You are the AI clinical assistant inside the "AMR Clinical Decision Support App" — a mobile antimicrobial stewardship tool developed with Makerere College of Health Sciences.
+SYSTEM_PROMPT = """You are the AI clinical assistant inside the "Steward AMR" antimicrobial stewardship app — a clinical decision support tool for antimicrobial resistance surveillance and treatment.
 
 You understand this app's features:
 - Organism profiles (E. coli, Klebsiella, S. aureus, Pseudomonas): morphology, diseases, virulence factors, risk factors, clinical importance.

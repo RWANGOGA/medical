@@ -10,6 +10,8 @@ import { Palette, BRANDING } from "../constants/branding";
 import { useTheme } from "../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
+import { NavigationBar } from "../components/navigation-bar";
+import { AppFooter } from "../components/footer";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -90,6 +92,12 @@ export default function LoginScreen() {
           <Text style={styles.registerLink}>Don't have an account? Sign up</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Navigation buttons — appear on every page */}
+      <NavigationBar colors={colors} />
+
+      {/* Footer with app features — appear on every page */}
+      <AppFooter colors={colors} />
     </KeyboardAvoidingView>
   );
 }

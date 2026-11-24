@@ -6,6 +6,8 @@ import { api } from "../../services/api";
 import { Palette } from "../../constants/branding";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
+import { NavigationBar } from "../../components/navigation-bar";
+import { AppFooter } from "../../components/footer";
 
 export default function PatientDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -90,6 +92,8 @@ export default function PatientDetailScreen() {
           headerTintColor: colors.text,
         }}
       />
+      {/* Navigation buttons — appear on every page */}
+      <NavigationBar colors={colors} />
       <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
 
         {/* Header profile */}
@@ -166,6 +170,9 @@ export default function PatientDetailScreen() {
         </TouchableOpacity>
 
       </ScrollView>
+
+      {/* Footer with app features — appears on every page */}
+      <AppFooter colors={colors} />
     </>
   );
 }

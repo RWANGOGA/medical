@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { StyleSheet, Text, View, FlatList, ActivityIndicator, TouchableOpacity } from "react-native";
-import { Link, useRouter } from "expo-router";
+import { StyleSheet, Text, View, ScrollView, ActivityIndicator, TouchableOpacity } from "react-native";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../../services/api";
 import { Palette } from "../../constants/branding";
@@ -26,7 +26,7 @@ export default function PatientsScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
+      <View style={StyleSheet.flatten([styles.center, { backgroundColor: colors.background }])}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -34,7 +34,7 @@ export default function PatientsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+      <View style={StyleSheet.flatten([styles.header, { paddingTop: insets.top + 16 }])}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Active Cases</Text>
           <Text style={styles.subtitle}>Ward surveillance and treatment tracking</Text>
@@ -49,36 +49,33 @@ export default function PatientsScreen() {
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={patients}
-        keyExtractor={(item) => String(item.id)}
-        numColumns={isTabletOrLarger ? 2 : 1}
-        key={isTabletOrLarger ? "tablet" : "phone"}
-        contentContainerStyle={styles.listContent}
-        columnWrapperStyle={isTabletOrLarger ? styles.columnWrapper : undefined}
-        renderItem={({ item }) => (
-          <Link href={`/patient/${item.id}`} asChild>
-            <View style={[styles.card, isTabletOrLarger && styles.cardTablet]}>
-              <View style={styles.cardHeader}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.meta}>{item.age}y · {item.sex} · {item.diagnosis}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
+      <ScrollView style={styles.container} contentContainerStyle={styles.listContent}>
+        {(patients || []).map((item: any) => (
+          <TouchableOpacity
+            key={String(item.id)}
+            style={StyleSheet.flatten([styles.card, isTabletOrLarger && styles.cardTablet])}
+            onPress={() => router.push(`/patient/${item.id}`)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.cardHeader}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{item.name?.charAt(0) || "?"}</Text>
               </View>
-              {item.culture_results ? (
-                <View style={styles.cultureBadge}>
-                  <Ionicons name="flask" size={12} color={colors.reserve} />
-                  <Text style={styles.cultureText} numberOfLines={1}>{item.culture_results}</Text>
-                </View>
-              ) : null}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.meta}>{item.age}y · {item.sex} · {item.diagnosis}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
             </View>
-          </Link>
-        )}
-      />
+            {item.culture_results ? (
+              <View style={styles.cultureBadge}>
+                <Ionicons name="flask" size={12} color={colors.reserve} />
+                <Text style={styles.cultureText} numberOfLines={1}>{item.culture_results}</Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
     </View>
   );
 }

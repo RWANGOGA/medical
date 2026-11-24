@@ -9,6 +9,8 @@ import { Palette } from "../constants/branding";
 import { useTheme } from "../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
+import { NavigationBar } from "../components/navigation-bar";
+import { AppFooter } from "../components/footer";
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -172,12 +174,18 @@ export default function RegisterScreen() {
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => router.replace("/login")}>
+            <TouchableOpacity onPress={() => router.replace("/register")}>
               <Text style={styles.loginLink}>Already have an account? Sign in</Text>
             </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
+
+      {/* Navigation buttons — appear on every page */}
+      <NavigationBar colors={colors} />
+
+      {/* Footer with app features — appear on every page */}
+      <AppFooter colors={colors} />
     </KeyboardAvoidingView>
   );
 }

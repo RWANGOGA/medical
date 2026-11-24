@@ -7,6 +7,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../services/api";
 import { Palette } from "../../constants/branding";
 import { useAssistant } from "../../context/AssistantContext";
+import { NavigationBar } from "../../components/navigation-bar";
+import { AppFooter } from "../../components/footer";
 import { HospitalFilter } from "./components/HospitalFilter";
 import { AntibioticCard } from "./components/AntibioticCard";
 
@@ -50,12 +52,12 @@ export function PublicHome({ colors }: PublicHomeProps) {
   const styles = makeStyles(colors);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 90 }}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 160 }}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <View style={styles.headerTop}>
           <View>
-            <Text style={styles.headerSub}>MAKERERE COLLEGE OF HEALTH SCIENCES</Text>
+            <Text style={styles.headerSub}>ANTIMICROBIAL STEWARDSHIP</Text>
             <Text style={styles.headerTitle}>AMR Stewardship</Text>
           </View>
           <View style={styles.headerIcon}>
@@ -72,6 +74,9 @@ export function PublicHome({ colors }: PublicHomeProps) {
           <Text style={styles.searchText}>Search organism or antibiotic…</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Navigation buttons — available on every page */}
+      <NavigationBar colors={colors} />
 
       {/* Hospital Filter */}
       <HospitalFilter value={hospital} onChange={setHospital} colors={colors} isAuthenticated={false} />
@@ -200,7 +205,14 @@ export function PublicHome({ colors }: PublicHomeProps) {
             <Ionicons name="chevron-forward" size={18} color={colors.subtext} />
           </TouchableOpacity>
         </View>
+
+        {/* Footer with app features — appears on every page */}
+        <AppFooter colors={colors} />
       </View>
+
+      {/* Navigation buttons — appear on every page */}
+      <NavigationBar colors={colors} />
+
     </ScrollView>
   );
 }
