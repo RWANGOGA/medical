@@ -5,6 +5,8 @@ import { useTheme } from "../context/ThemeContext";
 import { usePwaInstall } from "../hooks/use-pwa-install";
 import { useOffline } from "../hooks/use-offline";
 import { downloadApk, openInstallHelp } from "../constants/downloads";
+import { useI18n } from "../context/I18nContext";
+import { LOCALES, LOCALE_LABEL_KEY } from "../i18n";
 import { useResponsive } from "../utils/responsive";
 
 /**
@@ -18,7 +20,9 @@ export function AppTopBar() {
   const { canInstall, installing, installed, install } = usePwaInstall();
   const { online, pending, syncing, syncNow } = useOffline();
   const { isPhone } = useResponsive();
+  const { locale, setLocale, t } = useI18n();
   const [helpVisible, setHelpVisible] = useState(false);
+  const [langVisible, setLangVisible] = useState(false);
 
   if (Platform.OS !== "web") return null;
 
@@ -109,6 +113,20 @@ export function AppTopBar() {
           )}
 
           <TouchableOpacity
+            onPress={() => setLangVisible(true)}
+            style={[styles.secondaryButton, { borderColor: colors.border }]}
+            accessibilityRole="button"
+            accessibilityLabel={t("lang.label")}
+          >
+            <Ionicons name="language" size={15} color={colors.subtext} />
+            {!isPhone && (
+              <Text style={[styles.secondaryText, { color: colors.subtext }]}>
+                {t(LOCALE_LABEL_KEY[locale])}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: colors.primary }]}
             onPress={() => downloadApk().catch(() => undefined)}
             accessibilityRole="button"
@@ -184,6 +202,37 @@ export function AppTopBar() {
               <Text style={[styles.modalLink, { color: colors.subtext }]}>Close</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </View>
+    </Modal>
+
+    <Modal
+      visible={langVisible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setLangVisible(false)}
+    >
+      <View style={styles.modalRoot}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setLangVisible(false)} />
+        <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.modalTitle, { color: colors.text }]}>{t("lang.label")}</Text>
+          {LOCALES.map((l) => (
+            <TouchableOpacity
+              key={l}
+              style={[styles.modalStep, { paddingVertical: 10 }]}
+              onPress={async () => { await setLocale(l); setLangVisible(false); }}
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name={locale === l ? "checkmark-circle" : "ellipse-outline"}
+                size={18}
+                color={locale === l ? colors.primary : colors.subtext}
+              />
+              <Text style={[styles.modalStepText, { color: colors.text, fontWeight: locale === l ? "800" : "500" }]}>
+                {t(LOCALE_LABEL_KEY[l])}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
     </Modal>

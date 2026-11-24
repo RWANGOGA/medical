@@ -12,6 +12,7 @@ import { NavigationBar } from "../../components/navigation-bar";
 import { AppFooter } from "../../components/footer";
 import { HospitalFilter } from "./components/HospitalFilter";
 import { AntibioticCard } from "./components/AntibioticCard";
+import { useI18n } from "../../context/I18nContext";
 import { UgandaContext } from "./components/UgandaContext";
 
 const ALL_HOSPITALS = "All Hospitals";
@@ -24,6 +25,7 @@ export function PublicHome({ colors }: PublicHomeProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { openAssistant } = useAssistant();
+  const { t } = useI18n();
   const [hospital, setHospital] = useState(ALL_HOSPITALS);
   const activeHospital = hospital === ALL_HOSPITALS ? undefined : hospital;
 
@@ -59,12 +61,12 @@ export function PublicHome({ colors }: PublicHomeProps) {
   const antibioticCount = (antibiotics as any[])?.length ?? 0;
 
   const quickActions = [
-    { icon: "search", label: "Search", sub: "Organisms & drugs", color: colors.primary, onPress: () => router.push("/(tabs)/search") },
-    { icon: "pulse", label: "Resistance", sub: "Antibiogram", color: colors.reserve, onPress: () => router.push("/(tabs)/resistance") },
-    { icon: "analytics", label: "Consumption", sub: "AMC / DDD", color: colors.watch, onPress: () => router.push("/consumption") },
-    { icon: "book", label: "Guidelines", sub: "UGG 2023", color: colors.access, onPress: () => router.push("/guidelines") },
-    { icon: "newspaper", label: "Publications", sub: "Research library", color: colors.primary, onPress: () => router.push("/(tabs)/publications") },
-    { icon: "chatbubble-ellipses", label: "Assistant", sub: "Clinical AI", color: colors.primary, onPress: openAssistant },
+    { icon: "search", label: t("nav.search"), sub: "Organisms & drugs", color: colors.primary, onPress: () => router.push("/(tabs)/search") },
+    { icon: "pulse", label: t("nav.resistance"), sub: "Antibiogram", color: colors.reserve, onPress: () => router.push("/(tabs)/resistance") },
+    { icon: "analytics", label: t("nav.consumption"), sub: "AMC / DDD", color: colors.watch, onPress: () => router.push("/consumption") },
+    { icon: "book", label: t("nav.guidelines"), sub: "UGG 2023", color: colors.access, onPress: () => router.push("/guidelines") },
+    { icon: "newspaper", label: t("nav.publications"), sub: "Research library", color: colors.primary, onPress: () => router.push("/(tabs)/publications") },
+    { icon: "chatbubble-ellipses", label: t("home.assistant"), sub: "Clinical AI", color: colors.primary, onPress: openAssistant },
   ];
 
   const styles = makeStyles(colors);
@@ -76,7 +78,7 @@ export function PublicHome({ colors }: PublicHomeProps) {
         <View style={styles.heroTop}>
           <View style={styles.heroBadge}>
             <Ionicons name="shield-checkmark" size={14} color={colors.onPrimary} />
-            <Text style={styles.heroBadgeText}>STEWARDSHIP · UGANDA</Text>
+            <Text style={styles.heroBadgeText}>{t("app.badge")}</Text>
           </View>
           <TouchableOpacity
             style={styles.heroIconBtn}
@@ -90,8 +92,7 @@ export function PublicHome({ colors }: PublicHomeProps) {
 
         <Text style={styles.heroTitle}>Steward AMR</Text>
         <Text style={styles.heroSub}>
-          Antimicrobial-resistance surveillance and stewardship for Ugandan hospitals —
-          works offline, on any device.
+          {t("app.tagline")}
         </Text>
 
         <View style={styles.heroSearch}>
@@ -102,18 +103,18 @@ export function PublicHome({ colors }: PublicHomeProps) {
             accessibilityRole="button"
             accessibilityLabel="Search organism or antibiotic"
           >
-            <Text style={styles.heroSearchText}>Search organism or antibiotic…</Text>
+            <Text style={styles.heroSearchText}>{t("common.searchPlaceholder")}</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.heroCtas}>
           <TouchableOpacity style={styles.heroCtaPrimary} onPress={downloadApk} accessibilityRole="button">
             <Ionicons name="download" size={16} color={colors.onPrimary} />
-            <Text style={styles.heroCtaPrimaryText}>Get the app</Text>
+            <Text style={styles.heroCtaPrimaryText}>{t("common.getTheApp")}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.heroCtaSecondary} onPress={openInstallHelp} accessibilityRole="button">
             <Ionicons name="help-circle-outline" size={16} color={colors.onPrimary} />
-            <Text style={styles.heroCtaSecondaryText}>Install help</Text>
+            <Text style={styles.heroCtaSecondaryText}>{t("common.installHelp")}</Text>
           </TouchableOpacity>
         </View>
 
@@ -121,12 +122,12 @@ export function PublicHome({ colors }: PublicHomeProps) {
         <View style={styles.statsStrip}>
           <View style={styles.stat}>
             <Text style={styles.statNum}>{hospitalCount || "—"}</Text>
-            <Text style={styles.statLabel}>Hospitals</Text>
+            <Text style={styles.statLabel}>{t("home.hospitals")}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.stat}>
             <Text style={styles.statNum}>{antibioticCount || "—"}</Text>
-            <Text style={styles.statLabel}>Antibiotics</Text>
+            <Text style={styles.statLabel}>{t("home.antibiotics")}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.stat}>
@@ -136,7 +137,7 @@ export function PublicHome({ colors }: PublicHomeProps) {
           <View style={styles.statDivider} />
           <View style={styles.stat}>
             <Text style={styles.statNum}>Offline</Text>
-            <Text style={styles.statLabel}>Ready</Text>
+            <Text style={styles.statLabel}>{t("home.offlineReady")}</Text>
           </View>
         </View>
       </View>
@@ -161,7 +162,7 @@ export function PublicHome({ colors }: PublicHomeProps) {
 
         {/* Quick actions grid */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick access</Text>
+          <Text style={styles.sectionTitle}>{t("home.quickAccess")}</Text>
           <View style={styles.actionGrid}>
             {quickActions.map((a) => (
               <TouchableOpacity
@@ -184,7 +185,7 @@ export function PublicHome({ colors }: PublicHomeProps) {
         {/* WHO AWaRe summary */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
-            WHO AWaRe category summary{activeHospital ? ` — ${activeHospital}` : ""}
+            {t("home.aware")}{activeHospital ? ` — ${activeHospital}` : ""}
           </Text>
           <View style={styles.card}>
             {awareLoading ? (
@@ -211,8 +212,8 @@ export function PublicHome({ colors }: PublicHomeProps) {
 
         {/* Frequently used antibiotics */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Frequently used antibiotics</Text>
-          <Text style={styles.sectionHint}>Tap any drug for a clinical summary</Text>
+          <Text style={styles.sectionTitle}>{t("home.frequentAntibiotics")}</Text>
+          <Text style={styles.sectionHint}>{t("home.tapForSummary")}</Text>
 
           {antibioticsLoading ? (
             <View style={styles.loadingRow}>
@@ -229,7 +230,7 @@ export function PublicHome({ colors }: PublicHomeProps) {
                   style={styles.viewAllButton}
                   onPress={() => router.push("/(tabs)/search")}
                 >
-                  <Text style={styles.viewAllText}>View all {antibiotics.length} antibiotics →</Text>
+                  <Text style={styles.viewAllText}>{t("home.viewAll")} {antibiotics.length} antibiotics →</Text>
                 </TouchableOpacity>
               )}
             </>
@@ -253,8 +254,8 @@ export function PublicHome({ colors }: PublicHomeProps) {
             <Ionicons name="pulse" size={20} color={colors.primary} />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.ctaTitle}>Ask the clinical assistant</Text>
-            <Text style={styles.ctaSub}>Resistance mechanisms, treatment choices, drug safety</Text>
+            <Text style={styles.ctaTitle}>{t("home.assistant")}</Text>
+            <Text style={styles.ctaSub}>{t("home.assistantSub")}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.subtext} />
         </TouchableOpacity>
@@ -269,8 +270,8 @@ export function PublicHome({ colors }: PublicHomeProps) {
             <Ionicons name="newspaper" size={20} color={colors.primary} />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.ctaTitle}>Latest research & findings</Text>
-            <Text style={styles.ctaSub}>Articles, videos, papers on AMR and stewardship</Text>
+            <Text style={styles.ctaTitle}>{t("home.research")}</Text>
+            <Text style={styles.ctaSub}>{t("home.researchSub")}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.subtext} />
         </TouchableOpacity>
@@ -285,8 +286,8 @@ export function PublicHome({ colors }: PublicHomeProps) {
             <Ionicons name="log-in" size={20} color={colors.primary} />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.ctaTitle}>For healthcare professionals</Text>
-            <Text style={styles.ctaSub}>Patient management, CDS engine, audit & reporting</Text>
+            <Text style={styles.ctaTitle}>{t("home.professionals")}</Text>
+            <Text style={styles.ctaSub}>{t("home.professionalsSub")}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.subtext} />
         </TouchableOpacity>

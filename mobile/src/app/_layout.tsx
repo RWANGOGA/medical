@@ -7,6 +7,7 @@ import { ActivityIndicator, View, StyleSheet } from "react-native";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { AssistantProvider } from "../context/AssistantContext";
 import { ThemeProvider, useTheme } from "../context/ThemeContext";
+import { I18nProvider } from "../context/I18nContext";
 import { ApiError, flushPendingMutations } from "../services/api";
 import { onOfflineSynced, refreshPendingCount, initCacheScope } from "../services/offline";
 import { DownloadAppPrompt } from "../components/download-app-prompt";
@@ -84,11 +85,13 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <AuthProvider>
-          <AssistantProvider>
-            <AppContent />
-          </AssistantProvider>
-        </AuthProvider>
+        <I18nProvider>
+          <AuthProvider>
+            <AssistantProvider>
+              <AppContent />
+            </AssistantProvider>
+          </AuthProvider>
+        </I18nProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );
