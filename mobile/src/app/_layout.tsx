@@ -8,7 +8,7 @@ import { AuthProvider, useAuth } from "../context/AuthContext";
 import { AssistantProvider } from "../context/AssistantContext";
 import { ThemeProvider, useTheme } from "../context/ThemeContext";
 import { ApiError, flushPendingMutations } from "../services/api";
-import { onOfflineSynced, refreshPendingCount } from "../services/offline";
+import { onOfflineSynced, refreshPendingCount, initCacheScope } from "../services/offline";
 import { DownloadAppPrompt } from "../components/download-app-prompt";
 import { AppTopBar } from "../components/top-bar";
 
@@ -72,8 +72,10 @@ export default function RootLayout() {
 
   // Replay offline writes and refresh every cached query after a sync.
   useEffect(() => {
-    refreshPendingCount().catch(() => undefined);
-    flushPendingMutations().catch(() => undefined);
+    initCacheScope()
+      .then(() => refreshPendingCount().catch(() => undefined))
+      .then(() => flushPendingMutations().catch(() => undefined))
+      .catch(() => undefined);
     return onOfflineSynced(() => {
       queryClient.invalidateQueries();
     });

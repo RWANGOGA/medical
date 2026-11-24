@@ -14,6 +14,60 @@ import { Platform } from "react-native";
 
 const CACHE_PREFIX = "steward:cache:v1:";
 const QUEUE_KEY = "steward:queue:v1";
+const SCOPE_KEY = "steward:scope:v1";
+
+/**
+ * Signed-in user id that owns the cache and queue. Keys are namespaced by it so
+ * a second user on the same device can never read the previous user's patient
+ * data, even offline. `null` means "signed out".
+ */
+let cacheScope: string | null = null;
+
+export function getCacheScope(): string | null {
+  return cacheScope;
+}
+
+/** Restore the scope saved by the last session. Call once at startup. */
+export async function initCacheScope(): Promise<string | null> {
+  try {
+    cacheScope = await AsyncStorage.getItem(SCOPE_KEY);
+  } catch {
+    cacheScope = null;
+  }
+  return cacheScope;
+}
+
+/**
+ * Point the cache at a user. When the user changes, everything cached for the
+ * previous user is removed before the new scope becomes active.
+ */
+export async function setCacheScope(userId: number | string | null): Promise<void> {
+  const next = userId == null ? null : String(userId);
+  if (next === cacheScope) return;
+  await clearOfflineData();
+  cacheScope = next;
+  try {
+    if (next) await AsyncStorage.setItem(SCOPE_KEY, next);
+    else await AsyncStorage.removeItem(SCOPE_KEY);
+  } catch {
+    // ignore storage failures
+  }
+  await refreshPendingCount();
+}
+
+/** Remove every cached response and queued write on this device. */
+export async function clearOfflineData(): Promise<void> {
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const ours = keys.filter(
+      (key) => key.startsWith(CACHE_PREFIX) || key.startsWith(QUEUE_KEY)
+    );
+    if (ours.length) await (AsyncStorage as any).multiRemove(ours);
+  } catch {
+    // ignore
+  }
+  setState({ pending: 0 });
+}
 
 export interface OfflineState {
   online: boolean;
@@ -93,11 +147,11 @@ export function emitOfflineSynced() {
 /* ------------------------------------------------------------------ */
 
 export function cacheKey(endpoint: string): string {
-  return `get:${endpoint}`;
+  return `get:${cacheScope ?? "guest"}:${endpoint}`;
 }
 
 export function mutationCacheKey(endpoint: string, body: string): string {
-  return `post:${endpoint}:${body}`;
+  return `post:${cacheScope ?? "guest"}:${endpoint}:${body}`;
 }
 
 export async function readCache<T>(key: string): Promise<CachedValue<T> | null> {
@@ -135,9 +189,13 @@ export async function removeCache(key: string): Promise<void> {
 /* Mutation queue                                                      */
 /* ------------------------------------------------------------------ */
 
+function queueStorageKey(): string {
+  return `${QUEUE_KEY}:${cacheScope ?? "guest"}`;
+}
+
 export async function readQueue(): Promise<QueuedMutation[]> {
   try {
-    const raw = await AsyncStorage.getItem(QUEUE_KEY);
+    const raw = await AsyncStorage.getItem(queueStorageKey());
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? (parsed as QueuedMutation[]) : [];
@@ -148,7 +206,7 @@ export async function readQueue(): Promise<QueuedMutation[]> {
 
 async function writeQueue(queue: QueuedMutation[]): Promise<void> {
   try {
-    await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+    await AsyncStorage.setItem(queueStorageKey(), JSON.stringify(queue));
   } catch {
     // ignore
   }

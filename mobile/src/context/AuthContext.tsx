@@ -2,6 +2,11 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, setAuthToken, getStoredToken } from "../services/api";
+import {
+  initCacheScope,
+  setCacheScope,
+  clearOfflineData,
+} from "../services/offline";
 
 interface User {
   id: number;
@@ -34,15 +39,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const loadAuth = async () => {
+      await initCacheScope();
       const token = await getStoredToken();
       if (token) {
         try {
           const userData = await api.getMe();
           setUser(userData);
           setIsAuthenticated(true);
-        } catch (error) {
-          await setAuthToken(null);
+          await AsyncStorage.setItem("userData", JSON.stringify(userData));
+          await setCacheScope(userData.id);
+        } catch (error: any) {
+          if (error?.status === 401) {
+            await setAuthToken(null);
+            await setCacheScope(null);
+            await clearOfflineData();
+          }
+          // Otherwise keep the session and cached data for offline use.
         }
+      } else {
+        await setCacheScope(null);
       }
       setIsLoading(false);
     };
@@ -50,17 +65,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (token: string, userData: User) => {
-    // Set token SYNCHRONOUSLY first (before any queries fire)
     await setAuthToken(token);
+    await AsyncStorage.setItem("userData", JSON.stringify(userData));
+    await setCacheScope(userData.id);
     setUser(userData);
     setIsAuthenticated(true);
-    await AsyncStorage.setItem("userData", JSON.stringify(userData));
-    
-    // Invalidate all queries so they refetch with the new token
     queryClient.invalidateQueries();
   };
 
   const logout = async () => {
+    await setCacheScope(null);
+    await clearOfflineData();
     await setAuthToken(null);
     setUser(null);
     setIsAuthenticated(false);
