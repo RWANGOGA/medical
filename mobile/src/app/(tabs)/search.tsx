@@ -13,6 +13,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 import { CONTENT_MAX_WIDTH } from "../../components/screen";
+import { EmptyState } from "../../components/empty-state";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -157,17 +158,17 @@ export default function SearchScreen() {
       <ScrollView contentContainerStyle={styles.resultsContent} keyboardShouldPersistTaps="handled">
         {tab === "organisms" && (
           orgResults.length ? orgResults.map((o: any) => <OrganismCard key={o.id} o={o} styles={styles} colors={colors} />)
-          : <Text style={styles.empty}>No organisms match "{q}".</Text>
+          : <EmptyState colors={colors} icon="search-outline" title="No organisms match" subtitle={`No results for "${q}".`} />
         )}
 
         {tab === "antibiotics" && (
           abxResults.length ? abxResults.map((a: any) => <AntibioticCard key={a.id} a={a} styles={styles} colors={colors} />)
-          : <Text style={styles.empty}>No antibiotics match "{q}".</Text>
+          : <EmptyState colors={colors} icon="medkit-outline" title="No antibiotics match" subtitle={`No results for "${q}".`} />
         )}
 
         {tab === "patients" && (
           patientsErr ? (
-            <Text style={styles.empty}>Sign in as a doctor to search patients.</Text>
+            <EmptyState colors={colors} icon="lock-closed-outline" title="Sign in required" subtitle="Sign in as a doctor to search patients." actionLabel="Sign in" onAction={() => router.push("/login")} />
           ) : patResults.length ? (
             patResults.map((p: any) => (
               <TouchableOpacity key={p.id} style={styles.card} onPress={() => router.push(`/patient/${p.id}`)} activeOpacity={0.85}>
@@ -186,7 +187,7 @@ export default function SearchScreen() {
               </TouchableOpacity>
             ))
           ) : (
-            <Text style={styles.empty}>No patients match "{q}".</Text>
+            <EmptyState colors={colors} icon="people-outline" title="No patients match" subtitle={q ? `No patients match "${q}".` : "Try a different search."} />
           )
         )}
       </ScrollView>
