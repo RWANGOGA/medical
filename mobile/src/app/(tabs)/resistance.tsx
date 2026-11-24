@@ -8,6 +8,7 @@ import { api } from "../../services/api";
 import { Palette } from "../../constants/branding";
 import { useTheme } from "../../context/ThemeContext";
 import { CONTENT_MAX_WIDTH } from "../../components/screen";
+import { EmptyState } from "../../components/empty-state";
 
 const H = 220;
 const MAX = 60;
@@ -87,7 +88,7 @@ function StratifiedCard({ data, colors, styles }: any) {
   const groups = dims[dimension]?.groups || [];
 
   if (!dimKeys.length) {
-    return <Text style={styles.footnote}>No isolates available for stratification.</Text>;
+    return <EmptyState colors={colors} icon="pulse-outline" title="No isolates to stratify" subtitle="Add lab results to see GLASS resistance breakdowns." />;
   }
 
   return (

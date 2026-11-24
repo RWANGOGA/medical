@@ -12,6 +12,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import { CONTENT_MAX_WIDTH } from "../components/screen";
 import { NavigationBar } from "../components/navigation-bar";
+import { EmptyState } from "../components/empty-state";
 import { AppFooter } from "../components/footer";
 
 const ALL = "All Hospitals";
@@ -250,7 +251,7 @@ export default function ConsumptionScreen() {
                   </View>
                 ))
               ) : (
-                <Text style={styles.empty}>No consumption data.</Text>
+                <EmptyState colors={colors} icon="flask-outline" title="No consumption data" subtitle="Record antibiotic use to see DDD totals and AWaRe breakdown." />
               )}
             </View>
 

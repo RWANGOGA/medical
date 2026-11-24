@@ -57,6 +57,12 @@ export function AppFooter({ colors }: { colors: Palette }) {
       icon: "newspaper-outline" as const,
       onPress: () => router.push("/publications" as never),
     },
+    {
+      key: "about",
+      label: "About",
+      icon: "information-circle-outline" as const,
+      onPress: () => router.push("/about" as never),
+    },
   ];
 
   const featureStyle = (active: boolean) => ({
