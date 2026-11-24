@@ -1,6 +1,6 @@
 import { useRouter, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import { useOffline } from "../hooks/use-offline";
@@ -48,7 +48,7 @@ export function NavigationBar({
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated } = useAuth();
-  const { isDesktopOrLarger } = useResponsive();
+  const { isDesktopOrLarger, isPhone } = useResponsive();
   const { online, pending, syncing, syncNow } = useOffline();
 
   const items =
@@ -63,8 +63,8 @@ export function NavigationBar({
     return current === route || current.startsWith(`${route}/`);
   };
 
-  return (
-    <View style={[styles.nav, isDesktopOrLarger && styles.navDesktop]}>
+  const content = (
+    <>
       {Platform.OS !== "web" && !online && (
         <View style={styles.offlineChip} accessibilityRole="alert">
           <Ionicons name="cloud-offline-outline" size={13} color="#B45309" />
@@ -126,8 +126,18 @@ export function NavigationBar({
           </TouchableOpacity>
         );
       })}
-    </View>
+    </>
   );
+
+  if (isPhone) {
+    return (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nav}>
+        {content}
+      </ScrollView>
+    );
+  }
+
+  return <View style={[styles.nav, isDesktopOrLarger && styles.navDesktop]}>{content}</View>;
 }
 
 const styles = StyleSheet.create({
