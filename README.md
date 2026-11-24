@@ -30,6 +30,8 @@ low-connectivity settings are never blocked.
   age/sex/ward/origin stratification.
 - **Clinical decision support** — CDS engine, global AMR model, treatment
   recommendations, audit trail.
+- **Stewardship reports** — in-app report (workload, AWaRe, GLASS data quality,
+  antibiogram, high-resistance alerts) plus CSV export.
 - **Multi-language** — English, Luganda, Swahili via an in-app language switcher.
 - **Privacy** — patient/lab data scoped to the caller's hospital plus own records;
   admins see all; per-user offline cache/queue so a second user on a shared

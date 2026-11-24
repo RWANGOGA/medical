@@ -31,6 +31,7 @@ export const AUTH_NAV_DESTINATIONS: NavDestination[] = [
   { key: "add-lab-result", label: "Lab Result", icon: "flask-outline", route: "/add-lab-result" },
   { key: "cds", label: "CDS", icon: "medical-outline", route: "/cds" },
   { key: "audit", label: "Audit", icon: "list-outline", route: "/audit" },
+  { key: "reports", label: "Reports", icon: "document-text-outline", route: "/reports" },
 ];
 
 /**

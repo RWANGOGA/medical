@@ -344,6 +344,8 @@ export const api = {
   // Feature 5: Report export (public endpoint)
   reportUrl: (hospital?: string) =>
     `${BASE_URL}/reports/monthly${hospital ? `?hospital=${encodeURIComponent(hospital)}` : ""}`,
+  getReportSummary: (hospital?: string) =>
+    request<any>(`/reports/summary${hospital ? `?hospital=${encodeURIComponent(hospital)}` : ""}`),
   // AI Assistant
   sendAssistantMessage: (messages: any) =>
     request<{ reply: string }>("/assistant/chat", { method: "POST", body: JSON.stringify({ messages }) }),
