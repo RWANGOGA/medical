@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
 import { usePwaInstall } from "../hooks/use-pwa-install";
@@ -60,84 +60,95 @@ export function AppTopBar() {
           )}
         </View>
 
-        <View style={styles.actions}>
-          {!online && (
-            <View style={styles.offlineChip}>
-              <Ionicons name="cloud-offline-outline" size={13} color="#B45309" />
-              <Text style={styles.offlineText}>
-                Offline{pending > 0 ? ` · ${pending} queued` : " · saved data"}
-              </Text>
-            </View>
-          )}
-
-          {online && pending > 0 && (
-            <TouchableOpacity
-              style={[styles.syncChip, { borderColor: colors.border }]}
-              onPress={syncNow}
-              accessibilityRole="button"
-              accessibilityLabel={`Sync ${pending} offline changes`}
-            >
-              <Ionicons
-                name={syncing ? "sync" : "cloud-upload-outline"}
-                size={13}
-                color={colors.primary}
-              />
-              <Text style={[styles.syncText, { color: colors.primary }]}>
-                {syncing ? "Syncing…" : `Sync ${pending}`}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {!installed && (
-            <TouchableOpacity
-              style={[styles.secondaryButton, { borderColor: colors.primary }]}
-              onPress={handleInstall}
-              disabled={installing}
-              accessibilityRole="button"
-              accessibilityLabel="Install the web app on this device"
-            >
-              <Ionicons name="download-outline" size={15} color={colors.primary} />
-              {!isPhone && (
-                <Text style={[styles.secondaryText, { color: colors.primary }]}>
-                  {installing ? "Installing…" : "Install app"}
-                </Text>
+        {(() => {
+          const actions = (
+            <>
+              {!online && (
+                <View style={styles.offlineChip}>
+                  <Ionicons name="cloud-offline-outline" size={13} color="#B45309" />
+                  <Text style={styles.offlineText}>
+                    Offline{pending > 0 ? ` · ${pending} queued` : " · saved data"}
+                  </Text>
+                </View>
               )}
-            </TouchableOpacity>
-          )}
 
-          {installed && !isPhone && (
-            <View style={styles.installedChip}>
-              <Ionicons name="checkmark-circle" size={14} color="#059669" />
-              <Text style={styles.installedText}>Installed</Text>
-            </View>
-          )}
+              {online && pending > 0 && (
+                <TouchableOpacity
+                  style={[styles.syncChip, { borderColor: colors.border }]}
+                  onPress={syncNow}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Sync ${pending} offline changes`}
+                >
+                  <Ionicons
+                    name={syncing ? "sync" : "cloud-upload-outline"}
+                    size={13}
+                    color={colors.primary}
+                  />
+                  <Text style={[styles.syncText, { color: colors.primary }]}>
+                    {syncing ? "Syncing…" : `Sync ${pending}`}
+                  </Text>
+                </TouchableOpacity>
+              )}
 
-          <TouchableOpacity
-            onPress={() => setLangVisible(true)}
-            style={[styles.secondaryButton, { borderColor: colors.border }]}
-            accessibilityRole="button"
-            accessibilityLabel={t("lang.label")}
-          >
-            <Ionicons name="language" size={15} color={colors.subtext} />
-            {!isPhone && (
-              <Text style={[styles.secondaryText, { color: colors.subtext }]}>
-                {t(LOCALE_LABEL_KEY[locale])}
-              </Text>
-            )}
-          </TouchableOpacity>
+              {!installed && (
+                <TouchableOpacity
+                  style={[styles.secondaryButton, { borderColor: colors.primary }]}
+                  onPress={handleInstall}
+                  disabled={installing}
+                  accessibilityRole="button"
+                  accessibilityLabel="Install the web app on this device"
+                >
+                  <Ionicons name="download-outline" size={15} color={colors.primary} />
+                  {!isPhone && (
+                    <Text style={[styles.secondaryText, { color: colors.primary }]}>
+                      {installing ? "Installing…" : "Install app"}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )}
 
-          <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-            onPress={() => downloadApk().catch(() => undefined)}
-            accessibilityRole="button"
-            accessibilityLabel="Download the Android APK"
-          >
-            <Ionicons name="logo-android" size={16} color={colors.onPrimary} />
-            <Text style={[styles.primaryText, { color: colors.onPrimary }]}>
-              {isPhone ? "APK" : "Download Android app"}
-            </Text>
-          </TouchableOpacity>
-        </View>
+              {installed && !isPhone && (
+                <View style={styles.installedChip}>
+                  <Ionicons name="checkmark-circle" size={14} color="#059669" />
+                  <Text style={styles.installedText}>Installed</Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                onPress={() => setLangVisible(true)}
+                style={[styles.secondaryButton, { borderColor: colors.border }]}
+                accessibilityRole="button"
+                accessibilityLabel={t("lang.label")}
+              >
+                <Ionicons name="language" size={15} color={colors.subtext} />
+                {!isPhone && (
+                  <Text style={[styles.secondaryText, { color: colors.subtext }]}>
+                    {t(LOCALE_LABEL_KEY[locale])}
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+                onPress={() => downloadApk().catch(() => undefined)}
+                accessibilityRole="button"
+                accessibilityLabel="Download the Android APK"
+              >
+                <Ionicons name="logo-android" size={16} color={colors.onPrimary} />
+                <Text style={[styles.primaryText, { color: colors.onPrimary }]}>
+                  {isPhone ? "APK" : "Download Android app"}
+                </Text>
+              </TouchableOpacity>
+            </>
+          );
+          return isPhone ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actions}>
+              {actions}
+            </ScrollView>
+          ) : (
+            <View style={styles.actions}>{actions}</View>
+          );
+        })()}
       </View>
     </View>
 

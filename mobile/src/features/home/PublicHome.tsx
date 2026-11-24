@@ -13,6 +13,7 @@ import { AppFooter } from "../../components/footer";
 import { HospitalFilter } from "./components/HospitalFilter";
 import { AntibioticCard } from "./components/AntibioticCard";
 import { useI18n } from "../../context/I18nContext";
+import { useResponsive } from "../../utils/responsive";
 import { UgandaContext } from "./components/UgandaContext";
 
 const ALL_HOSPITALS = "All Hospitals";
@@ -26,6 +27,7 @@ export function PublicHome({ colors }: PublicHomeProps) {
   const insets = useSafeAreaInsets();
   const { openAssistant } = useAssistant();
   const { t } = useI18n();
+  const { isPhone } = useResponsive();
   const [hospital, setHospital] = useState(ALL_HOSPITALS);
   const activeHospital = hospital === ALL_HOSPITALS ? undefined : hospital;
 
@@ -119,23 +121,23 @@ export function PublicHome({ colors }: PublicHomeProps) {
         </View>
 
         {/* Stats strip */}
-        <View style={styles.statsStrip}>
-          <View style={styles.stat}>
+        <View style={[styles.statsStrip, isPhone && { flexWrap: "wrap", gap: 6 }]}>
+          <View style={[styles.stat, isPhone && { minWidth: "45%" }]}>
             <Text style={styles.statNum}>{hospitalCount || "—"}</Text>
             <Text style={styles.statLabel}>{t("home.hospitals")}</Text>
           </View>
           <View style={styles.statDivider} />
-          <View style={styles.stat}>
+          <View style={[styles.stat, isPhone && { minWidth: "45%" }]}>
             <Text style={styles.statNum}>{antibioticCount || "—"}</Text>
             <Text style={styles.statLabel}>{t("home.antibiotics")}</Text>
           </View>
           <View style={styles.statDivider} />
-          <View style={styles.stat}>
+          <View style={[styles.stat, isPhone && { minWidth: "45%" }]}>
             <Text style={styles.statNum}>WHO</Text>
             <Text style={styles.statLabel}>GLASS · AWaRe</Text>
           </View>
           <View style={styles.statDivider} />
-          <View style={styles.stat}>
+          <View style={[styles.stat, isPhone && { minWidth: "45%" }]}>
             <Text style={styles.statNum}>Offline</Text>
             <Text style={styles.statLabel}>{t("home.offlineReady")}</Text>
           </View>
