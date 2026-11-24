@@ -6,8 +6,9 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { api } from "../../services/api";
+import { api, ApiError } from "../../services/api";
 import { Palette } from "../../constants/branding";
+import { formatUgandaDate } from "../../constants/uganda";
 import { useTheme } from "../../context/ThemeContext";
 import { useResponsive } from "../../utils/responsive";
 import { PublicationsSidebar } from "./components/PublicationsSidebar";
@@ -27,7 +28,7 @@ export function PublicationsScreen({ colors }: PublicationsScreenProps) {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedType, setSelectedType] = useState("all");
 
-  const { data: publications, isLoading } = useQuery({
+  const { data: publications, isLoading, error } = useQuery({
     queryKey: ["publications", selectedCategory, selectedType],
     queryFn: () =>
       api.getPublications(
@@ -36,6 +37,8 @@ export function PublicationsScreen({ colors }: PublicationsScreenProps) {
         selectedCategory === "all" ? undefined : selectedCategory
       ),
   });
+
+  const needsSignIn = error instanceof ApiError && error.status === 401;
 
   const filteredPublications = useMemo(() => {
     if (!publications?.publications) return [];
@@ -170,7 +173,21 @@ export function PublicationsScreen({ colors }: PublicationsScreenProps) {
           </ScrollView>
 
           {/* Publications List */}
-          {isLoading ? (
+          {needsSignIn ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="lock-closed-outline" size={48} color={colors.subtext} />
+              <Text style={styles.emptyText}>Sign in to browse publications</Text>
+              <Text style={styles.emptySubtext}>
+                The clinical library is available to registered health workers.
+              </Text>
+              <TouchableOpacity
+                style={styles.signInButton}
+                onPress={() => router.push("/login" as any)}
+              >
+                <Text style={styles.signInButtonText}>Sign in</Text>
+              </TouchableOpacity>
+            </View>
+          ) : isLoading ? (
             <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
           ) : filteredPublications.length > 0 ? (
             filteredPublications.map((pub: any) => (
@@ -188,7 +205,7 @@ export function PublicationsScreen({ colors }: PublicationsScreenProps) {
                     ]}
                   >
                     <Ionicons
-                      name={getContentTypeColor(pub.content_type) as any}
+                      name={getContentTypeIcon(pub.content_type) as any}
                       size={20}
                       color={getContentTypeColor(pub.content_type)}
                     />
@@ -198,7 +215,7 @@ export function PublicationsScreen({ colors }: PublicationsScreenProps) {
                       {pub.title}
                     </Text>
                     <Text style={styles.publicationMeta}>
-                      {pub.author_name} · {new Date(pub.created_at).toLocaleDateString()}
+                      {pub.author_name} · {formatUgandaDate(pub.created_at)}
                     </Text>
                   </View>
                 </View>
@@ -331,6 +348,14 @@ function makeStyles(c: Palette) {
     statsText: { fontSize: 11, color: c.subtext, marginLeft: 4 },
     emptyState: { alignItems: "center", paddingVertical: 60 },
     emptyText: { fontSize: 16, fontWeight: "600", color: c.text, marginTop: 16 },
-    emptySubtext: { fontSize: 13, color: c.subtext, marginTop: 4 },
+    emptySubtext: { fontSize: 13, color: c.subtext, marginTop: 4, textAlign: "center", paddingHorizontal: 24 },
+    signInButton: {
+      marginTop: 18,
+      backgroundColor: c.primary,
+      paddingHorizontal: 22,
+      paddingVertical: 11,
+      borderRadius: 10,
+    },
+    signInButtonText: { color: c.onPrimary, fontWeight: "700", fontSize: 14 },
   });
 }

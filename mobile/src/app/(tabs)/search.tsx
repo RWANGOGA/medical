@@ -8,6 +8,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../../services/api";
 import { Palette } from "../../constants/branding";
+import { brandsFor } from "../../constants/uganda";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
@@ -48,12 +49,18 @@ function OrganismCard({ o, styles, colors }: { o: any; styles: any; colors: Pale
 function AntibioticCard({ a, styles, colors }: { a: any; styles: any; colors: Palette }) {
   const [open, setOpen] = useState(false);
   const awareColor = a.aware_category === "Access" ? colors.access : a.aware_category === "Watch" ? colors.watch : colors.reserve;
+  const brands = brandsFor(a.generic_name, a.brand_names);
   return (
     <TouchableOpacity style={styles.card} onPress={() => { LayoutAnimation.easeInEaseOut(); setOpen(!open); }} activeOpacity={0.85}>
       <View style={styles.row}>
         <View style={{ flex: 1 }}>
           <Text style={styles.abxName}>{a.generic_name}</Text>
           <Text style={styles.sub}>{a.drug_class}</Text>
+          {brands.length > 0 && (
+            <Text style={{ fontSize: 10, color: colors.primary, marginTop: 2, fontWeight: "600" }} numberOfLines={1}>
+              In Uganda: {brands.slice(0, 3).join(" · ")}
+            </Text>
+          )}
         </View>
         <View style={[styles.badge, { backgroundColor: awareColor + "20" }]}>
           <Text style={[styles.badgeText, { color: awareColor }]}>{a.aware_category}</Text>

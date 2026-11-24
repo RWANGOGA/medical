@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Download the Android app — Medical</title>
+    <title>Download Steward AMR — Uganda antimicrobial stewardship</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -92,11 +92,12 @@
   </head>
   <body>
     <main>
-      <span class="badge">Android · APK</span>
-      <h1>Install the Medical app</h1>
+      <span class="badge">Android · APK · Works offline</span>
+      <h1>Install Steward AMR</h1>
       <p>
-        The APK is built automatically on every release and is signed for direct installation.
-        If you are on a computer, open this page on your phone to download it there.
+        Uganda antimicrobial stewardship and resistance surveillance for clinicians and
+        health facilities. The Android app and the installable web app both keep working
+        when the network drops.
       </p>
 
       <div class="actions">
@@ -104,7 +105,10 @@
           class="button primary"
           href="https://github.com/RWANGOGA/medical/releases/download/apk-latest/medical.apk"
         >
-          ⬇ Download latest APK
+          ⬇ Download Android APK
+        </a>
+        <a class="button secondary" href="./">
+          Use the web app / install as PWA
         </a>
         <a
           class="button secondary"
@@ -118,7 +122,11 @@
       <ul>
         <li>Android may ask you to allow installing from an unknown source — enable it for your browser.</li>
         <li>If an older version is installed, uninstall it first when the signature differs.</li>
-        <li>Prefer the web app? <a href="./">Open the web version</a>.</li>
+        <li>
+          Prefer no download? Open the web app, then use the browser's <strong>Install app</strong>
+          option (Chrome/Edge) or <strong>Add to Home Screen</strong> (Android/iOS Safari).
+        </li>
+        <li>Sign in once while online so patient lists and guidelines are cached for offline use.</li>
       </ul>
 
       <p id="auto-status" hidden style="color: var(--brand); font-weight: 600">
@@ -126,8 +134,9 @@
       </p>
 
       <footer>
-        Debug-signed internal builds unless a release keystore is configured.
+        Uganda-focused antimicrobial stewardship · WHO GLASS / WHONET / EARS-Net compatible.
         Asset: <code>medical.apk</code> on the <code>apk-latest</code> release tag.
+        Debug-signed internal builds unless a release keystore is configured.
       </footer>
     </main>
 

@@ -8,6 +8,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../../services/api";
 import { Palette } from "../../constants/branding";
+import { UGANDA_UCG_GUIDELINES } from "../../constants/uganda";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -72,6 +73,17 @@ function makeStyles(c: Palette) {
       marginTop: 20,
       marginBottom: 10,
     },
+    ugandaBanner: {
+      backgroundColor: c.primarySoft,
+      marginHorizontal: 16,
+      marginTop: 16,
+      padding: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.primary + "33",
+    },
+    ugandaBannerTitle: { fontSize: 13, fontWeight: "800", color: c.primary },
+    ugandaBannerBody: { fontSize: 12, lineHeight: 17, color: c.text, marginTop: 4 },
     emptyText: {
       fontSize: 12,
       color: c.subtext,
@@ -415,17 +427,23 @@ export default function GuidelinesScreen() {
     queryFn: api.getGuidelinesPublic,
   });
 
-  const guidelines: Guideline[] = useMemo(
-    () =>
-      (rawGuidelines || []).map((g: any) => ({
-        id: stableId(g.title),
-        title: g.title,
-        source: g.source,
-        year: g.year,
-        summary: g.summary,
-      })),
-    [rawGuidelines]
-  );
+  const guidelines: Guideline[] = useMemo(() => {
+    const uganda: Guideline[] = UGANDA_UCG_GUIDELINES.map((g) => ({
+      id: g.id,
+      title: g.title,
+      source: g.source,
+      year: g.year,
+      summary: g.summary,
+    }));
+    const international: Guideline[] = (rawGuidelines || []).map((g: any) => ({
+      id: stableId(g.title),
+      title: g.title,
+      source: g.source,
+      year: g.year,
+      summary: g.summary,
+    }));
+    return [...uganda, ...international];
+  }, [rawGuidelines]);
 
   const awareColor = (c: string) =>
     c === "Access"
@@ -445,9 +463,19 @@ export default function GuidelinesScreen() {
         </View>
       </View>
 
-      <View style={styles.column}>
-        {/* Clinical Guidelines — Expandable */}
-        <Text style={styles.sectionTitle}>Treatment Protocols</Text>
+        <View style={styles.column}>
+          {/* Uganda first-line guidance */}
+          <View style={styles.ugandaBanner}>
+            <Text style={styles.ugandaBannerTitle}>Uganda first-line guidance</Text>
+            <Text style={styles.ugandaBannerBody}>
+              The first {UGANDA_UCG_GUIDELINES.length} protocols follow the Uganda Clinical
+              Guidelines 2023. Confirm against the full UCG chapter and your facility
+              antibiogram before prescribing.
+            </Text>
+          </View>
+
+          {/* Clinical Guidelines — Expandable */}
+          <Text style={styles.sectionTitle}>Treatment Protocols</Text>
         {guidelines.length === 0 && (
           <Text style={styles.emptyText}>Loading guidelines…</Text>
         )}

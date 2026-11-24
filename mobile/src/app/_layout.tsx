@@ -7,8 +7,10 @@ import { ActivityIndicator, View, StyleSheet } from "react-native";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { AssistantProvider } from "../context/AssistantContext";
 import { ThemeProvider, useTheme } from "../context/ThemeContext";
-import { ApiError } from "../services/api";
+import { ApiError, flushPendingMutations } from "../services/api";
+import { onOfflineSynced, refreshPendingCount } from "../services/offline";
 import { DownloadAppPrompt } from "../components/download-app-prompt";
+import { AppTopBar } from "../components/top-bar";
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -44,10 +46,13 @@ function AppContent() {
   }
 
   return (
-    <>
-      <Stack screenOptions={{ headerShown: false }} />
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <AppTopBar />
+      <View style={styles.stack}>
+        <Stack screenOptions={{ headerShown: false }} />
+      </View>
       <DownloadAppPrompt />
-    </>
+    </View>
   );
 }
 
@@ -64,6 +69,16 @@ export default function RootLayout() {
         },
       })
   );
+
+  // Replay offline writes and refresh every cached query after a sync.
+  useEffect(() => {
+    refreshPendingCount().catch(() => undefined);
+    flushPendingMutations().catch(() => undefined);
+    return onOfflineSynced(() => {
+      queryClient.invalidateQueries();
+    });
+  }, [queryClient]);
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
@@ -78,6 +93,12 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  stack: {
+    flex: 1,
+  },
   loading: {
     flex: 1,
     justifyContent: "center",

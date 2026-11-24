@@ -5,6 +5,7 @@ import { LayoutAnimation, Platform, UIManager } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../services/api";
 import { Palette } from "../../../constants/branding";
+import { brandsFor } from "../../../constants/uganda";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -18,7 +19,13 @@ export interface AntibioticSummary {
 }
 
 interface AntibioticCardProps {
-  abx: { id: string; generic_name: string; drug_class: string; aware_category: string };
+  abx: {
+    id: string;
+    generic_name: string;
+    drug_class: string;
+    aware_category: string;
+    brand_names?: string[];
+  };
   awareColor: (c: string) => string;
   colors: Palette;
 }
@@ -40,6 +47,7 @@ export function AntibioticCard({ abx, awareColor, colors }: AntibioticCardProps)
   };
 
   const styles = makeStyles(colors);
+  const brands = brandsFor(abx.generic_name, abx.brand_names);
 
   return (
     <View style={styles.card}>
@@ -50,6 +58,11 @@ export function AntibioticCard({ abx, awareColor, colors }: AntibioticCardProps)
         <View style={styles.titleContainer}>
           <Text style={styles.name}>{abx.generic_name}</Text>
           <Text style={styles.drugClass}>{abx.drug_class}</Text>
+          {brands.length > 0 && (
+            <Text style={styles.brands} numberOfLines={1}>
+              In Uganda: {brands.slice(0, 3).join(" · ")}
+            </Text>
+          )}
         </View>
         <View style={[styles.badge, { backgroundColor: awareColor(abx.aware_category) + "20" }]}>
           <Text style={[styles.badgeText, { color: awareColor(abx.aware_category) }]}>{abx.aware_category}</Text>
@@ -120,6 +133,7 @@ function makeStyles(c: Palette) {
     titleContainer: { flex: 1, marginRight: 8 },
     name: { fontSize: 14, fontWeight: "700", color: c.text },
     drugClass: { fontSize: 11, color: c.subtext, marginTop: 2 },
+    brands: { fontSize: 10, color: c.primary, marginTop: 2, fontWeight: "600" },
     badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
     badgeText: { fontSize: 10, fontWeight: "700" },
     expanded: { paddingHorizontal: 14, paddingBottom: 14 },

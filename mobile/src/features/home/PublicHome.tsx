@@ -11,6 +11,7 @@ import { NavigationBar } from "../../components/navigation-bar";
 import { AppFooter } from "../../components/footer";
 import { HospitalFilter } from "./components/HospitalFilter";
 import { AntibioticCard } from "./components/AntibioticCard";
+import { UgandaContext } from "./components/UgandaContext";
 
 const ALL_HOSPITALS = "All Hospitals";
 
@@ -122,6 +123,9 @@ export function PublicHome({ colors }: PublicHomeProps) {
             )}
           </View>
         </View>
+
+        {/* Uganda clinical context */}
+        <UgandaContext colors={colors} />
 
         {/* Frequently Used Antibiotics */}
         <View style={styles.section}>

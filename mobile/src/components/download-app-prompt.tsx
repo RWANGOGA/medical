@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import {
-  Linking,
   Modal,
   Platform,
   Pressable,
@@ -11,18 +10,20 @@ import {
   View,
 } from "react-native";
 import { useTheme } from "../context/ThemeContext";
-import { APK_DOWNLOAD_URL, DOWNLOAD_PAGE_PATH } from "../constants/downloads";
+import { downloadApk, openInstallHelp } from "../constants/downloads";
+import { usePwaInstall } from "../hooks/use-pwa-install";
 
 /**
  * Web-only install prompt.
  *
  * Shown once per browser visit so anyone opening the web version is always
- * offered the Android app. It never blocks the web app: "Continue in browser"
- * dismisses it and the full app remains usable.
+ * offered the Android app or the installable PWA. It never blocks the web app:
+ * "Continue in browser" dismisses it and the full app remains usable offline.
  */
 export function DownloadAppPrompt() {
   const { colors } = useTheme();
   const [visible, setVisible] = useState(false);
+  const { canInstall, installing, install } = usePwaInstall();
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -37,7 +38,7 @@ export function DownloadAppPrompt() {
 
   const openApk = () => {
     setVisible(false);
-    Linking.openURL(APK_DOWNLOAD_URL).catch(() => {
+    downloadApk().catch(() => {
       // Some in-app browsers refuse programmatic navigation; leave the user
       // on the page rather than failing silently.
       setVisible(true);
@@ -46,11 +47,7 @@ export function DownloadAppPrompt() {
 
   const openHelp = () => {
     setVisible(false);
-    const url =
-      typeof window === "undefined"
-        ? DOWNLOAD_PAGE_PATH
-        : new URL(DOWNLOAD_PAGE_PATH, window.location.origin).toString();
-    Linking.openURL(url).catch(() => {});
+    openInstallHelp().catch(() => undefined);
   };
 
   return (
@@ -76,21 +73,42 @@ export function DownloadAppPrompt() {
             <Ionicons name="phone-portrait-outline" size={26} color={colors.primary} />
           </View>
 
-          <Text style={[styles.title, { color: colors.text }]}>Get the Android app</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Get the app</Text>
           <Text style={[styles.body, { color: colors.subtext }]}>
-            Install the APK for a full-screen, faster experience. The web version
-            stays available whenever you need it.
+            Install the Android APK or add the web app to your device. Both keep
+            working when the network drops, and the browser version stays available.
           </Text>
 
+          {canInstall && (
+            <TouchableOpacity
+              style={[styles.primary, { backgroundColor: colors.primary }]}
+              onPress={() => {
+                install().catch(() => undefined);
+                setVisible(false);
+              }}
+              disabled={installing}
+              accessibilityRole="button"
+              accessibilityLabel="Install the web app on this device"
+            >
+              <Ionicons name="download-outline" size={18} color={colors.onPrimary} />
+              <Text style={[styles.primaryText, { color: colors.onPrimary }]}>
+                {installing ? "Installing…" : "Install web app"}
+              </Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
-            style={[styles.primary, { backgroundColor: colors.primary }]}
+            style={[
+              styles.primary,
+              { backgroundColor: colors.primary, marginTop: canInstall ? 10 : 0 },
+            ]}
             onPress={openApk}
             accessibilityRole="button"
             accessibilityLabel="Download the Android APK"
           >
-            <Ionicons name="download-outline" size={18} color={colors.onPrimary} />
+            <Ionicons name="logo-android" size={18} color={colors.onPrimary} />
             <Text style={[styles.primaryText, { color: colors.onPrimary }]}>
-              Download APK
+              Download Android APK
             </Text>
           </TouchableOpacity>
 

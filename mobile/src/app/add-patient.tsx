@@ -9,6 +9,7 @@ import { api } from "../services/api";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import { Palette } from "../constants/branding";
+import { UGANDA_COMMON_DIAGNOSES, UGANDA_REFERRAL_HOSPITALS } from "../constants/uganda";
 import { Screen } from "../components/screen";
 import { NavigationBar } from "../components/navigation-bar";
 import { AppFooter } from "../components/footer";
@@ -347,6 +348,28 @@ export default function AddPatientScreen() {
                       placeholder="Hospital or facility name"
                       placeholderTextColor={colors.subtext}
                     />
+                    <View style={styles.quickRow}>
+                      {UGANDA_REFERRAL_HOSPITALS.slice(0, 8).map((hospital) => (
+                        <TouchableOpacity
+                          key={hospital}
+                          style={[
+                            styles.quickChip,
+                            formData.hospital === hospital && styles.quickChipActive,
+                          ]}
+                          onPress={() => setFormData({ ...formData, hospital })}
+                        >
+                          <Text
+                            style={[
+                              styles.quickText,
+                              formData.hospital === hospital && styles.quickTextActive,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {hospital.replace(" Hospital", "")}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
                   </View>
 
                   <View style={styles.inputGroup}>
@@ -376,6 +399,27 @@ export default function AddPatientScreen() {
                       multiline
                       numberOfLines={3}
                     />
+                    <View style={styles.quickRow}>
+                      {UGANDA_COMMON_DIAGNOSES.map((diagnosis) => (
+                        <TouchableOpacity
+                          key={diagnosis}
+                          style={[
+                            styles.quickChip,
+                            formData.diagnosis === diagnosis && styles.quickChipActive,
+                          ]}
+                          onPress={() => setFormData({ ...formData, diagnosis })}
+                        >
+                          <Text
+                            style={[
+                              styles.quickText,
+                              formData.diagnosis === diagnosis && styles.quickTextActive,
+                            ]}
+                          >
+                            {diagnosis}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
                   </View>
 
                   <View style={styles.inputGroup}>
@@ -524,6 +568,19 @@ function makeStyles(c: Palette) {
     sexBtnActive: { backgroundColor: c.primary, borderColor: c.primary },
     sexBtnText: { fontSize: 14, color: c.text },
     sexBtnTextActive: { color: c.onPrimary, fontWeight: "700" },
+    quickRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+    quickChip: {
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      maxWidth: "100%",
+    },
+    quickChipActive: { backgroundColor: c.primarySoft, borderColor: c.primary },
+    quickText: { fontSize: 11, color: c.subtext, fontWeight: "600" },
+    quickTextActive: { color: c.primary, fontWeight: "800" },
 
     primaryBtn: {
       flexDirection: "row",

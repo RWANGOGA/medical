@@ -20,6 +20,12 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="description" content="Antimicrobial Stewardship Platform - Clinical Decision Support" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Steward AMR" />
+        <meta name="mobile-web-app-capable" content="yes" />
+
+        {/* PWA manifest — enables the browser "Install app" prompt. */}
+        <link id="pwa-manifest" rel="manifest" href="/medical/manifest.json" />
+        <link rel="apple-touch-icon" href="/medical/icons/apple-touch-icon.png" />
 
         {/* Preconnect to API domain for faster loading */}
         <link rel="preconnect" href="https://medical-sbit.onrender.com" />
@@ -110,8 +116,29 @@ export default function Root({ children }: PropsWithChildren) {
           }}
         />
         <ScrollViewStyleReset />
+
+        {/* Register the offline shell service worker (PWA + offline support). */}
+        <script dangerouslySetInnerHTML={{ __html: pwaBootstrap }} />
       </head>
       <body>{children}</body>
     </html>
   );
 }
+
+/**
+ * Runs in the browser only. Resolves the GitHub Pages `/medical/` base path so
+ * the same build also works on localhost during development, then registers
+ * the service worker that caches the app shell for offline use.
+ */
+const pwaBootstrap = `
+(function () {
+  var base = location.pathname.indexOf("/medical") === 0 ? "/medical/" : "/";
+  var manifest = document.getElementById("pwa-manifest");
+  if (manifest) manifest.href = base + "manifest.json";
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register(base + "sw.js", { scope: base }).catch(function () {});
+    });
+  }
+})();
+`;

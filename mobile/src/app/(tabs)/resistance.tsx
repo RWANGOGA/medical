@@ -21,6 +21,27 @@ const WHO: Record<string, string> = {
   "S. aureus": "HIGH",
 };
 
+/** Short, chart-friendly organism label. Keeps every species distinct. */
+function shortOrganism(name: string): string {
+  const known: Record<string, string> = {
+    "Escherichia coli": "E. coli",
+    "Klebsiella pneumoniae": "K. pneumoniae",
+    "Staphylococcus aureus": "S. aureus",
+    "Pseudomonas aeruginosa": "P. aeruginosa",
+    "Enterococcus faecium": "E. faecium",
+    "Enterobacter cloacae complex": "E. cloacae",
+    "Acinetobacter baumannii": "A. baumannii",
+    "Stenotrophomonas maltophilia": "S. maltophilia",
+    "Salmonella enterica serovar Typhi": "S. Typhi",
+    "Shigella flexneri": "S. flexneri",
+    "Neisseria gonorrhoeae": "N. gonorrhoeae",
+    "Streptococcus pneumoniae": "S. pneumoniae",
+  };
+  if (known[name]) return known[name];
+  const [genus, species] = name.trim().split(/\s+/);
+  return species ? `${genus[0]}. ${species}` : name;
+}
+
 function QualityCard({ quality, loading, colors, styles }: any) {
   if (loading) return <ActivityIndicator color={colors.primary} />;
   if (!quality) return null;
@@ -224,9 +245,9 @@ function BarChart({ items, W, colors }: any) {
         const bx = L + i * gap + (gap - barW) / 2;
         const by = y(it.value);
         return (
-          <React.Fragment key={it.label}>
+          <React.Fragment key={it.id ?? it.label}>
             <Rect x={bx} y={by} width={barW} height={T + IH - by} fill={whoColor(WHO[it.label] || "HIGH")} rx={4} />
-            <SvgText x={bx + barW / 2} y={H - 8} fontSize={9} fill={colors.subtext} textAnchor="middle">{it.label}</SvgText>
+            <SvgText x={bx + barW / 2} y={H - 8} fontSize={7.5} fill={colors.subtext} textAnchor="middle">{it.label}</SvgText>
           </React.Fragment>
         );
       })}
@@ -314,7 +335,8 @@ export default function ResistanceScreen() {
     { name: "CRE", color: colors.reserve, data: trends?.map((t: any) => t.cre) || [] },
   ];
   const bars = (organisms || []).map((o: any) => ({
-    label: o.name.includes("coli") ? "E. coli" : o.name.includes("pneumo") ? "K. pneumoniae" : o.name.includes("aureus") ? "S. aureus" : "P. aeruginosa",
+    id: o.name,
+    label: shortOrganism(o.name),
     value: o.resistance_rate,
   }));
 

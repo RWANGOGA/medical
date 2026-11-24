@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../services/api";
 import { Palette } from "../constants/branding";
+import { UGANDA_LAB_SPECIMENS } from "../constants/uganda";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import { NavigationBar } from "../components/navigation-bar";
@@ -167,7 +168,7 @@ export default function AddLabResultScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Specimen</Text>
           <View style={styles.chipRow}>
-            {["Urine", "Blood", "Sputum", "Cerebrospinal fluid", "Wound swab"].map((s) => (
+            {UGANDA_LAB_SPECIMENS.map((s) => (
               <TouchableOpacity
                 key={s}
                 style={[styles.chip, specimen === s && styles.chipActive]}

@@ -1,8 +1,9 @@
 import { useRouter, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
+import { useOffline } from "../hooks/use-offline";
 import { useResponsive } from "../utils/responsive";
 import type { Palette } from "../constants/branding";
 
@@ -48,6 +49,7 @@ export function NavigationBar({
   const pathname = usePathname();
   const { isAuthenticated } = useAuth();
   const { isDesktopOrLarger } = useResponsive();
+  const { online, pending, syncing, syncNow } = useOffline();
 
   const items =
     destinations ??
@@ -63,6 +65,31 @@ export function NavigationBar({
 
   return (
     <View style={[styles.nav, isDesktopOrLarger && styles.navDesktop]}>
+      {Platform.OS !== "web" && !online && (
+        <View style={styles.offlineChip} accessibilityRole="alert">
+          <Ionicons name="cloud-offline-outline" size={13} color="#B45309" />
+          <Text style={styles.offlineText}>
+            Offline — showing saved data{pending > 0 ? ` · ${pending} to sync` : ""}
+          </Text>
+        </View>
+      )}
+      {Platform.OS !== "web" && online && pending > 0 && (
+        <TouchableOpacity
+          style={[styles.syncChip, { borderColor: colors.primary }]}
+          onPress={syncNow}
+          accessibilityRole="button"
+          accessibilityLabel={`Sync ${pending} saved changes`}
+        >
+          <Ionicons
+            name={syncing ? "sync" : "cloud-upload-outline"}
+            size={13}
+            color={colors.primary}
+          />
+          <Text style={[styles.syncText, { color: colors.primary }]}>
+            {syncing ? "Syncing…" : `Sync ${pending} saved change${pending === 1 ? "" : "s"}`}
+          </Text>
+        </TouchableOpacity>
+      )}
       {items.map((item) => {
         const active = isActive(item.route);
         const buttonStyle = {
@@ -114,4 +141,28 @@ const styles = StyleSheet.create({
     flexWrap: "nowrap",
     overflow: "scroll",
   },
+  offlineChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FEF3C7",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  offlineText: { fontSize: 11.5, fontWeight: "700", color: "#B45309" },
+  syncChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  syncText: { fontSize: 11.5, fontWeight: "700" },
 });

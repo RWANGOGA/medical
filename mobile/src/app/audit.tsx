@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../services/api";
 import { Palette } from "../constants/branding";
+import { formatUgandaDateTime } from "../constants/uganda";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import { NavigationBar } from "../components/navigation-bar";
@@ -48,7 +49,7 @@ export default function AuditScreen() {
         <Text style={styles.user}>by {item.username}</Text>
       </View>
       {item.details ? <Text style={styles.details}>{item.details}</Text> : null}
-      <Text style={styles.time}>{new Date(item.timestamp).toLocaleString()}</Text>
+      <Text style={styles.time}>{formatUgandaDateTime(item.timestamp)}</Text>
     </View>
   );
 

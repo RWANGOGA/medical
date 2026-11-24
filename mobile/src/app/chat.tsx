@@ -22,6 +22,7 @@ import { Swipeable } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, getStoredToken } from "../services/api";
 import { Palette } from "../constants/branding";
+import { UGANDA_TIME_ZONE } from "../constants/uganda";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 
@@ -31,7 +32,11 @@ const LANGUAGES = ["English", "Swahili", "Luganda", "French", "Arabic"];
 const QUICK_REACTIONS = ["👍", "✅", "🙏", "❤️", "⚠️", "🔥"];
 
 const fmtTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  new Date(iso).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: UGANDA_TIME_ZONE,
+  });
 
 function dayLabel(iso: string) {
   const d = new Date(iso);
@@ -40,7 +45,12 @@ function dayLabel(iso: string) {
   yest.setDate(today.getDate() - 1);
   if (d.toDateString() === today.toDateString()) return "Today";
   if (d.toDateString() === yest.toDateString()) return "Yesterday";
-  return d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  return d.toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: UGANDA_TIME_ZONE,
+  });
 }
 
 const initials = (name: string) =>

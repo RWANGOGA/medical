@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "mobile",
+    "name": "Steward AMR",
     "slug": "mobile",
+    "description": "Uganda-focused antimicrobial resistance surveillance and stewardship for clinicians and health facilities.",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",

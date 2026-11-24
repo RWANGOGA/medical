@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../services/api";
 import { Palette } from "../../constants/branding";
+import { formatUgandaDate } from "../../constants/uganda";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { NavigationBar } from "../../components/navigation-bar";
@@ -316,7 +317,7 @@ export function AdminDashboard({ colors }: AdminDashboardProps) {
                   {pub.content_type} · {pub.category || "Uncategorized"}
                 </Text>
                 <Text style={styles.listCardMeta}>
-                  {pub.view_count} views · {new Date(pub.created_at).toLocaleDateString()}
+                  {pub.view_count} views · {formatUgandaDate(pub.created_at)}
                 </Text>
               </View>
             </View>

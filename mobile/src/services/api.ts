@@ -1,4 +1,19 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  QueuedMutation,
+  cacheKey,
+  emitOfflineSynced,
+  enqueueMutation,
+  getOfflineState,
+  markOffline,
+  markOnline,
+  mutationCacheKey,
+  readCache,
+  readQueue,
+  removeQueuedMutation,
+  updateOfflineState,
+  writeCache,
+} from "./offline";
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:8002/api/v1";
 
@@ -28,7 +43,122 @@ export const getStoredToken = async (): Promise<string | null> => {
   return token;
 };
 
+/* ------------------------------------------------------------------ */
+/* Offline-aware request layer                                         */
+/* ------------------------------------------------------------------ */
+
+const REQUEST_TIMEOUT_MS = 15000;
+
+/** POST responses worth keeping so CDS/guidance still opens offline. */
+const CACHEABLE_POSTS = [
+  "/cds/recommend",
+  "/antibiotics/summarize",
+  "/guidelines/expand",
+  "/search/patients",
+  "/assistant/chat",
+  "/translate/",
+];
+
+/** Writes that are safe to queue locally and replay when back online. */
+const QUEUEABLE_MUTATIONS: { pattern: RegExp; method: string; kind: string }[] = [
+  { pattern: /^\/patients\/$/, method: "POST", kind: "patient-create" },
+  { pattern: /^\/patients\/\d+$/, method: "PUT", kind: "patient-update" },
+  { pattern: /^\/lab\/results$/, method: "POST", kind: "lab-create" },
+  { pattern: /^\/amc\/use$/, method: "POST", kind: "amc-use" },
+  { pattern: /^\/amc\/activity$/, method: "POST", kind: "amc-activity" },
+];
+
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function throwIfNotOk(response: Response): Promise<void> {
+  if (response.ok) return;
+  const errorData = await response.json().catch(() => ({}));
+  throw new ApiError(
+    (errorData as { detail?: string }).detail || `API Error: ${response.status}`,
+    response.status
+  );
+}
+
+function optimisticRecord(kind: string, body: any, endpoint: string, tempId: number) {
+  const now = new Date().toISOString();
+  if (kind === "patient-update") {
+    return { ...body, id: Number(endpoint.split("/").pop()), __offline: true };
+  }
+  return { ...body, id: tempId, created_at: now, __offline: true };
+}
+
+async function applyOptimisticCache(kind: string, endpoint: string, record: any) {
+  if (kind === "patient-create") {
+    const cached = await readCache<any[]>(cacheKey("/patients/"));
+    const list = Array.isArray(cached?.data) ? cached.data : [];
+    await writeCache(cacheKey("/patients/"), [record, ...list.filter((p) => p.id !== record.id)]);
+    return;
+  }
+  if (kind === "patient-update") {
+    const cached = await readCache<any[]>(cacheKey("/patients/"));
+    if (Array.isArray(cached?.data)) {
+      const id = Number(endpoint.split("/").pop());
+      await writeCache(
+        cacheKey("/patients/"),
+        cached.data.map((p: any) => (p.id === id ? { ...p, ...record } : p))
+      );
+    }
+    return;
+  }
+  if (kind === "lab-create") {
+    const cached = await readCache<any[]>(cacheKey("/lab/results"));
+    const list = Array.isArray(cached?.data) ? cached.data : [];
+    await writeCache(cacheKey("/lab/results"), [record, ...list]);
+  }
+}
+
+async function handleOfflineMutation<T>(
+  endpoint: string,
+  method: string,
+  bodyText?: string
+): Promise<T> {
+  let body: unknown;
+  try {
+    body = bodyText ? JSON.parse(bodyText) : undefined;
+  } catch {
+    body = undefined;
+  }
+
+  const rule = QUEUEABLE_MUTATIONS.find(
+    (candidate) => candidate.method === method && candidate.pattern.test(endpoint)
+  );
+
+  if (rule) {
+    const tempId = -Date.now();
+    const record = optimisticRecord(rule.kind, body, endpoint, tempId);
+    await applyOptimisticCache(rule.kind, endpoint, record);
+    await enqueueMutation({ endpoint, method, body, kind: rule.kind, tempId });
+    return record as T;
+  }
+
+  if (bodyText) {
+    const cached = await readCache<T>(mutationCacheKey(endpoint, bodyText));
+    if (cached) return cached.data;
+  }
+
+  throw new ApiError(
+    "You are offline. This action needs a connection — your saved data is still available.",
+    0
+  );
+}
+
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const method = (options?.method || "GET").toUpperCase();
+  const bodyText = typeof options?.body === "string" ? options.body : undefined;
+
   const headers: Record<string, string> = { "Content-Type": "application/json" };
 
   // ALWAYS ensure we have the latest token (memory first, then storage)
@@ -39,13 +169,139 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     headers["Authorization"] = `Bearer ${authToken}`;
   }
 
-  const response = await fetch(`${BASE_URL}${endpoint}`, { headers, ...options });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new ApiError(errorData.detail || `API Error: ${response.status}`, response.status);
+  if (method === "GET") {
+    try {
+      const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
+        ...options,
+        method,
+        headers,
+      });
+      markOnline();
+      await throwIfNotOk(response);
+      const data = (await response.json()) as T;
+      await writeCache(cacheKey(endpoint), data);
+      return data;
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      markOffline();
+      const cached = await readCache<T>(cacheKey(endpoint));
+      if (cached) return cached.data;
+      throw new ApiError(
+        "You are offline and this page has not been saved yet. Connect once to make it available offline.",
+        0
+      );
+    }
   }
-  return response.json();
+
+  if (!getOfflineState().online) {
+    return handleOfflineMutation<T>(endpoint, method, bodyText);
+  }
+
+  try {
+    const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
+      ...options,
+      method,
+      headers,
+    });
+    markOnline();
+    await throwIfNotOk(response);
+    const data = (await response.json()) as T;
+    if (bodyText && CACHEABLE_POSTS.some((prefix) => endpoint.startsWith(prefix))) {
+      await writeCache(mutationCacheKey(endpoint, bodyText), data);
+    }
+    return data;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    markOffline();
+    return handleOfflineMutation<T>(endpoint, method, bodyText);
+  }
+}
+
+async function replaceOptimistic(entry: QueuedMutation, serverRecord: any) {
+  if (!serverRecord || entry.tempId === undefined) return;
+  if (entry.kind === "patient-create") {
+    const cached = await readCache<any[]>(cacheKey("/patients/"));
+    if (Array.isArray(cached?.data)) {
+      await writeCache(
+        cacheKey("/patients/"),
+        cached.data.map((p: any) => (p.id === entry.tempId ? serverRecord : p))
+      );
+    }
+    return;
+  }
+  if (entry.kind === "lab-create") {
+    const cached = await readCache<any[]>(cacheKey("/lab/results"));
+    if (Array.isArray(cached?.data)) {
+      await writeCache(
+        cacheKey("/lab/results"),
+        cached.data.map((l: any) => (l.id === entry.tempId ? serverRecord : l))
+      );
+    }
+  }
+}
+
+/**
+ * Replay writes queued while offline. Safe to call on app start, on the
+ * browser `online` event and from the "Sync now" button.
+ */
+export async function flushPendingMutations(): Promise<{ synced: number; failed: number }> {
+  const queue = await readQueue();
+  if (queue.length === 0) {
+    updateOfflineState({ pending: 0 });
+    return { synced: 0, failed: 0 };
+  }
+  if (getOfflineState().syncing) return { synced: 0, failed: 0 };
+
+  updateOfflineState({ syncing: true });
+
+  const token = authToken || (await AsyncStorage.getItem("authToken"));
+  let synced = 0;
+  let failed = 0;
+  let stopped = false;
+
+  for (const entry of queue) {
+    try {
+      const response = await fetchWithTimeout(`${BASE_URL}${entry.endpoint}`, {
+        method: entry.method,
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: entry.body !== undefined ? JSON.stringify(entry.body) : undefined,
+      });
+
+      if (!response.ok) {
+        // Permanent rejections should not block the queue forever.
+        if ([400, 403, 404, 409, 422].includes(response.status)) {
+          failed += 1;
+          await removeQueuedMutation(entry.id);
+          continue;
+        }
+        // Auth/rate-limit/server errors: keep the entry for a later retry.
+        stopped = true;
+        break;
+      }
+
+      const data = await response.json().catch(() => null);
+      await replaceOptimistic(entry, data);
+      await removeQueuedMutation(entry.id);
+      synced += 1;
+    } catch {
+      stopped = true;
+      break;
+    }
+  }
+
+  const remaining = await readQueue();
+  updateOfflineState({
+    syncing: false,
+    pending: remaining.length,
+    lastSyncAt: synced > 0 ? Date.now() : getOfflineState().lastSyncAt,
+    online: !stopped,
+  });
+  if (synced > 0) emitOfflineSynced();
+
+  return { synced, failed };
 }
 
 export const api = {
